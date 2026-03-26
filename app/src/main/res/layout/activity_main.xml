@@ -1,38 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/main"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:layout_height="match_parent">
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/guia_central"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_percent="0.5" />
 
     <TextView
-        android:id="@+id/tituloJuego"
+        android:id="@+id/text_teus_vaixells"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="316dp"
-        android:layout_marginTop="30dp"
-        android:text="Enfonsa la Flota"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.011" />
-
-    <Button
-        android:id="@+id/button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="30dp"
-        android:text="Button"
-        app:layout_constraintBaseline_toBaselineOf="@+id/tituloJuego"
-        app:layout_constraintEnd_toEndOf="parent" />
+        android:text="Els teus vaixells"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/surface_jugador"
+        app:layout_constraintStart_toStartOf="@+id/surface_jugador"
+        app:layout_constraintEnd_toEndOf="@+id/surface_jugador"/>
 
     <SurfaceView
-        android:id="@+id/surfaceView"
-        android:layout_width="585dp"
-        android:layout_height="299dp"
-        tools:layout_editor_absoluteX="67dp"
-        tools:layout_editor_absoluteY="68dp" />
+        android:id="@+id/surface_jugador"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintWidth_percent="0.35"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintEnd_toStartOf="@+id/guia_central"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <TextView
+        android:id="@+id/text_teus_intents"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Els teus intents"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toTopOf="@+id/surface_rival"
+        app:layout_constraintStart_toStartOf="@+id/surface_rival"
+        app:layout_constraintEnd_toEndOf="@+id/surface_rival"/>
+
+    <SurfaceView
+        android:id="@+id/surface_rival"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        app:layout_constraintWidth_percent="0.35"
+        app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintStart_toEndOf="@+id/guia_central"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
+
+    <TextView
+        android:id="@+id/text_missatges_titol"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Missatges:"
+        android:layout_marginBottom="4dp"
+        app:layout_constraintBottom_toTopOf="@+id/textViewMissatges"
+        app:layout_constraintStart_toStartOf="@+id/textViewMissatges" />
+
+    <TextView
+        android:id="@+id/textViewMissatges"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/capsa"
+        android:scrollbars="vertical"
+        app:layout_constraintHeight_percent="0.4"
+        app:layout_constraintStart_toEndOf="@+id/surface_rival"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
