@@ -105,23 +105,25 @@
         android:layout_height="0dp"
         android:layout_marginEnd="8dp"
         android:background="@drawable/capsa"
-        app:layout_constraintWidth_percent="0.08"
+        android:foreground="@drawable/atura"
         app:layout_constraintDimensionRatio="1:1"
+        app:layout_constraintEnd_toStartOf="@+id/btn_nou_joc"
         app:layout_constraintHorizontal_chainStyle="packed"
-        app:layout_constraintTop_toTopOf="@+id/text_teus_intents"
         app:layout_constraintStart_toEndOf="@+id/guia_dreta"
-        app:layout_constraintEnd_toStartOf="@+id/btn_nou_joc" />
+        app:layout_constraintTop_toTopOf="@+id/text_teus_intents"
+        app:layout_constraintWidth_percent="0.08" />
 
     <ImageButton
         android:id="@+id/btn_nou_joc"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:background="@drawable/capsa"
-        app:layout_constraintWidth_percent="0.08"
+        android:foreground="@drawable/newgame"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintTop_toTopOf="@+id/btn_aturar"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@+id/btn_aturar"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toTopOf="@+id/btn_aturar"
+        app:layout_constraintWidth_percent="0.08" />
 
     <ImageButton
         android:id="@+id/btn_connectar"
@@ -129,11 +131,12 @@
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/capsa"
-        app:layout_constraintWidth_percent="0.08"
+        android:foreground="@drawable/online"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintTop_toBottomOf="@+id/btn_aturar"
+        app:layout_constraintEnd_toEndOf="@+id/btn_aturar"
         app:layout_constraintStart_toStartOf="@+id/btn_aturar"
-        app:layout_constraintEnd_toEndOf="@+id/btn_aturar" />
+        app:layout_constraintTop_toBottomOf="@+id/btn_aturar"
+        app:layout_constraintWidth_percent="0.08" />
 
     <ImageButton
         android:id="@+id/btn_pista"
@@ -141,11 +144,12 @@
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
         android:background="@drawable/capsa"
-        app:layout_constraintWidth_percent="0.08"
+        android:foreground="@drawable/tip"
         app:layout_constraintDimensionRatio="1:1"
-        app:layout_constraintTop_toBottomOf="@+id/btn_nou_joc"
+        app:layout_constraintEnd_toEndOf="@+id/btn_nou_joc"
         app:layout_constraintStart_toStartOf="@+id/btn_nou_joc"
-        app:layout_constraintEnd_toEndOf="@+id/btn_nou_joc" />
+        app:layout_constraintTop_toBottomOf="@+id/btn_nou_joc"
+        app:layout_constraintWidth_percent="0.08" />
 
     <TextView
         android:id="@+id/textViewMissatges"
