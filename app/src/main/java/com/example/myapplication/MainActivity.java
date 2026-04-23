@@ -6,11 +6,12 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Bundle;
 import android.text.method.ScrollingMovementMethod;
-import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+import java.util.Iterator;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -20,6 +21,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ImageButton btnNouJoc, btnConnectar, btnAturar, btnPista;
     private SurfaceView surfaceJugador, surfaceRival;
+
+    private UnsortedArraySet<View> conjuntPistes;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,6 +58,48 @@ public class MainActivity extends AppCompatActivity {
         // Retrasar el dibujado hasta que las vistas estén creadas
         surfaceJugador.post(() -> pintarGraella(surfaceJugador));
         surfaceRival.post(() -> pintarGraella(surfaceRival));
+
+        // Fem desplaçables els textos de les pistes
+        TextView textPistesJugador = findViewById(R.id.text_pistes_jugador);
+        TextView textPistesRival = findViewById(R.id.text_pistes_rival);
+        textPistesJugador.setMovementMethod(new ScrollingMovementMethod());
+        textPistesRival.setMovementMethod(new ScrollingMovementMethod());
+
+        // Inicialitzem el conjunt
+        conjuntPistes = new UnsortedArraySet<>(8);
+
+        // Afegim els elements de la interfície al conjunt
+        conjuntPistes.add(findViewById(R.id.layout_pistes));
+        conjuntPistes.add(findViewById(R.id.btn_tancar_pistes));
+        conjuntPistes.add(findViewById(R.id.titol_pistes_jugador));
+        conjuntPistes.add(findViewById(R.id.titol_pistes_rival));
+        conjuntPistes.add(textPistesJugador);
+        conjuntPistes.add(textPistesRival);
+        conjuntPistes.add(findViewById(R.id.text_percentatge_jugador));
+        conjuntPistes.add(findViewById(R.id.text_percentatge_rival));
+
+        // Configurar el botó Pista per mostrar el panell
+        btnPista.setOnClickListener(v -> {
+            // Aquí en un futur es generarà el text de les pistes.
+            // De moment només mostrem el conjunt.
+            canviarVisibilitatPistes(View.VISIBLE);
+        });
+
+        // Configurar el botó "X" per amagar el panell
+        ImageButton btnTancarPistes = findViewById(R.id.btn_tancar_pistes);
+        btnTancarPistes.setOnClickListener(v -> canviarVisibilitatPistes(View.GONE));
+    }
+
+    //Mètode que utilitza l'ITERADOR per recórrer el conjunt i mostrar/amagar
+    private void canviarVisibilitatPistes(int visibilitat) {
+        Iterator<View> iterador = conjuntPistes.iterator();
+
+        while (iterador.hasNext()) {
+            View element = iterador.next();
+            if (element != null) {
+                element.setVisibility(visibilitat);
+            }
+        }
     }
 
     private void actualitzarEstatBotons(boolean nouEstat) {
@@ -183,21 +228,19 @@ public class MainActivity extends AppCompatActivity {
             });
 
             // Repintar el taulell de joc amb la nova casella seleccionada
-            pintaGraelles(c);
+            pintaGraelles(c, surfaceRival);
     }
 
     // Métode per a repintar la cuadrícula amb casella seleccionada
-    public void pintaGraelles(Casella c) {
-        if (surfaceRival.getHolder().getSurface().isValid()) {
-            int amplada = surfaceRival.getWidth();
-            int alt = surfaceRival.getHeight();
-            Canvas canvas = surfaceRival.getHolder().lockCanvas();
+    public void pintaGraelles(Casella c, SurfaceView surface) {
+        if (surface.getHolder().getSurface().isValid()) {
+            int amplada = surface.getWidth();
+            int alt = surface.getHeight();
+            Canvas canvas = surface.getHolder().lockCanvas();
 
             if (canvas != null) {
-                // Netejem el fons
                 canvas.drawColor(Color.parseColor("#D0E8E8"));
 
-                // Preparem pincell
                 Paint p = new Paint();
                 p.setColor(Color.parseColor("#90C0C0"));
                 p.setStrokeWidth(3);
@@ -205,33 +248,27 @@ public class MainActivity extends AppCompatActivity {
                 float casellaAmplada = (float) amplada / 10;
                 float casellaAlt = (float) alt / 10;
 
-                // Dibuixar la quadrícula
                 for (int i = 1; i < 10; i++) {
                     canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, alt, p);
                     canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
                 }
 
-                // Si tenim una casella pintem de vermell
                 if (c != null) {
                     Paint pSeleccio = new Paint();
-                    pSeleccio.setAntiAlias(true); // Perquè les boreres es vegin suaus
+                    pSeleccio.setAntiAlias(true);
                     pSeleccio.setStyle(Paint.Style.FILL);
                     pSeleccio.setColor(Color.RED);
-                    pSeleccio.setStrokeWidth(6); // Grosor de la línia del contorn
 
-                    // Calculem les coordenades del quadrat a pintar
                     float esquerra = c.getCoordenadaX() * casellaAmplada;
                     float dalt = c.getCoordenadaY() * casellaAlt;
                     float dreta = esquerra + casellaAmplada;
                     float baix = dalt + casellaAlt;
-
-                    // Definim el radi de redondeig de les esquines
                     float radiEsquines = 15f;
 
-                    canvas.drawRoundRect(esquerra, dalt, dreta, baix, radiEsquines, radiEsquines, pSeleccio);
+                    canvas.drawRoundRect(esquerra + 4, dalt + 4, dreta - 4, baix - 4, radiEsquines, radiEsquines, pSeleccio);
                 }
+                surface.getHolder().unlockCanvasAndPost(canvas);
             }
-            surfaceRival.getHolder().unlockCanvasAndPost(canvas);
         }
     }
 }
