@@ -360,10 +360,10 @@ public class MainActivity extends AppCompatActivity {
 
     private int getColorPerMida(int mida) {
         switch (mida) {
-            case 4: return Color.parseColor("#9C27B0"); // Lila
-            case 3: return Color.parseColor("#2196F3"); // Blau
-            case 2: return Color.parseColor("#4CAF50"); // Verd
-            default: return Color.parseColor("#F44336"); // Vermell
+            case 4: return Color.parseColor("#A79AFF"); // Lila
+            case 3: return Color.parseColor("#84b6f4"); // Blau
+            case 2: return Color.parseColor("#77DD77"); // Verd
+            default: return Color.parseColor("#FF7477"); // Vermell
         }
     }
 }
