@@ -19,10 +19,14 @@ public class MainActivity extends AppCompatActivity {
     private static final boolean ESTAT_JUGANT = true;
     private boolean estatJoc = ESTAT_ATURADA;
 
+    public static final int JUGADOR_PROPI = 0;
+    public static final int JUGADOR_RIVAL = 1;
     private ImageButton btnNouJoc, btnConnectar, btnAturar, btnPista;
     private SurfaceView surfaceJugador, surfaceRival;
 
     private UnsortedArraySet<View> conjuntPistes;
+
+    private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> vaixells;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,9 +59,9 @@ public class MainActivity extends AppCompatActivity {
         surfaceJugador = findViewById(R.id.surface_jugador);
         surfaceRival = findViewById(R.id.surface_rival);
 
-        // Dibuixem la graella
-        surfaceJugador.post(() -> pintarGraella(surfaceJugador));
-        surfaceRival.post(() -> pintarGraella(surfaceRival));
+        // Dibuixem la graella i els vaixells
+        surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+        surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
 
         // Fem desplaçables els textos de les pistes
         TextView textPistesJugador = findViewById(R.id.text_pistes_jugador);
@@ -88,6 +92,18 @@ public class MainActivity extends AppCompatActivity {
         // Configurar el botó "X" per amagar el panell
         ImageButton btnTancarPistes = findViewById(R.id.btn_tancar_pistes);
         btnTancarPistes.setOnClickListener(v -> canviarVisibilitatPistes(View.GONE));
+
+        // PART DELS VAIXELLS
+
+        // Creem el mapping principal (capacitat 2 jugadors)
+        vaixells = new UnsortedArrayMapping<>(2);
+
+        // Fiquem els sub-mappings de 20 caselles per a cada jugador
+        vaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
+        vaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+
+        // Generem tots els vaixells aleatòriament
+        crearVaixells();
     }
 
     //Mètode que utilitza l'ITERADOR per recórrer el conjunt i mostrar/amagar
@@ -125,44 +141,6 @@ public class MainActivity extends AppCompatActivity {
             btnAturar.setAlpha(1.0f);
             btnPista.setEnabled(true);
             btnPista.setAlpha(1.0f);
-        }
-    }
-
-    // Mètode per dibuixar la quadrícula 10x10
-    private void pintarGraella(SurfaceView surface) {
-        if (surface.getHolder().getSurface().isValid()) {
-
-            // Obtenim dimensions
-            int amplada = surface.getWidth();
-            int alt = surface.getHeight();
-
-            // Bloquegem per dibuixar
-            Canvas canvas = surface.getHolder().lockCanvas();
-
-            if (canvas != null) {
-                // Pintar fons
-                canvas.drawColor(Color.parseColor("#D0E8E8"));
-
-                // Preparar el pinzell per les línies
-                Paint p = new Paint();
-                p.setColor(Color.parseColor("#90C0C0")); // Color de la línia
-                p.setStrokeWidth(3);
-
-                // Calcular la separació entre línies (10 caselles)
-                float casellaAmplada = (float) amplada / 10;
-                float casellaAlt = (float) alt / 10;
-
-                // Dibuixar 9 línies verticals y 9 horizontals
-                for (int i = 1; i < 10; i++) {
-                    // Línia vertical: (xInicial, yInicial, xFinal, yFinal, pinzell)
-                    canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, alt, p);
-                    // Línia horitzontal
-                    canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
-                }
-
-                // Desbloquejar i mostrar
-                surface.getHolder().unlockCanvasAndPost(canvas);
-            }
         }
     }
 
@@ -230,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
             pintaGraelles(c, surfaceRival);
     }
 
-    // Métode per a repintar la cuadrícula amb casella seleccionada
+    // Mètode per pintar i repintar la graella i mostrar els vaixells
     public void pintaGraelles(Casella c, SurfaceView surface) {
         if (surface.getHolder().getSurface().isValid()) {
             int amplada = surface.getWidth();
@@ -238,8 +216,10 @@ public class MainActivity extends AppCompatActivity {
             Canvas canvas = surface.getHolder().lockCanvas();
 
             if (canvas != null) {
+                // Netejem el fons
                 canvas.drawColor(Color.parseColor("#D0E8E8"));
 
+                // Preparem pincell per la graella
                 Paint p = new Paint();
                 p.setColor(Color.parseColor("#90C0C0"));
                 p.setStrokeWidth(3);
@@ -247,12 +227,42 @@ public class MainActivity extends AppCompatActivity {
                 float casellaAmplada = (float) amplada / 10;
                 float casellaAlt = (float) alt / 10;
 
+                // Dibuixar la quadrícula (Línies)
                 for (int i = 1; i < 10; i++) {
                     canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, alt, p);
                     canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
                 }
 
-                if (c != null) {
+                // PINTAR VAIXELLS DEL JUGADOR
+                if (surface == surfaceJugador && vaixells != null) {
+                    UnsortedArrayMapping<Casella, Vaixell> mappingPropi = vaixells.get(JUGADOR_PROPI);
+
+                    if (mappingPropi != null) {
+                        Iterator<UnsortedArrayMapping<Casella, Vaixell>.Pair> iterador = mappingPropi.iterator();
+
+                        while (iterador.hasNext()) {
+                            UnsortedArrayMapping<Casella, Vaixell>.Pair parella = iterador.next();
+                            Casella casellaVaixell = parella.getKey();
+                            Vaixell vaixell = parella.getValue();
+
+                            Paint pVaixell = new Paint();
+                            pVaixell.setAntiAlias(true);
+                            pVaixell.setStyle(Paint.Style.FILL);
+                            pVaixell.setColor(vaixell.getColor());
+
+                            float esquerra = casellaVaixell.getCoordenadaX() * casellaAmplada;
+                            float dalt = casellaVaixell.getCoordenadaY() * casellaAlt;
+                            float dreta = esquerra + casellaAmplada;
+                            float baix = dalt + casellaAlt;
+                            float radiEsquines = 15f;
+
+                            canvas.drawRoundRect(esquerra + 4, dalt + 4, dreta - 4, baix - 4, radiEsquines, radiEsquines, pVaixell);
+                        }
+                    }
+                }
+
+                // PINTAR SELECCIÓ (Casella vermella al rival)
+                if (c != null && surface == surfaceRival) {
                     Paint pSeleccio = new Paint();
                     pSeleccio.setAntiAlias(true);
                     pSeleccio.setStyle(Paint.Style.FILL);
@@ -266,8 +276,94 @@ public class MainActivity extends AppCompatActivity {
 
                     canvas.drawRoundRect(esquerra + 4, dalt + 4, dreta - 4, baix - 4, radiEsquines, radiEsquines, pSeleccio);
                 }
+
+                // Finalment, alliberem i mostrem (Això s'ha d'executar SEMPRE)
                 surface.getHolder().unlockCanvasAndPost(canvas);
             }
+        }
+    }
+    private void crearVaixells() {
+        int[] configuracioFlota = {4, 3, 3, 2, 2, 2, 1, 1, 1, 1};
+        int idVaixell = 0;
+
+        for (int mida : configuracioFlota) {
+            // Obtenim els mappings específics de l'estructura principal
+            UnsortedArrayMapping<Casella, Vaixell> mappingPropi = vaixells.get(JUGADOR_PROPI);
+            UnsortedArrayMapping<Casella, Vaixell> mappingRival = vaixells.get(JUGADOR_RIVAL);
+
+            collocarVaixellAleatori(mida, idVaixell, JUGADOR_PROPI, mappingPropi);
+            idVaixell++;
+
+            collocarVaixellAleatori(mida, idVaixell, JUGADOR_RIVAL, mappingRival);
+            idVaixell++;
+        }
+    }
+
+    private void collocarVaixellAleatori(int mida, int id, int jugador, UnsortedArrayMapping<Casella, Vaixell> mapping) {
+        boolean colocat = false;
+        int color = getColorPerMida(mida); // Assignem un color segons la mida
+
+        while (!colocat) {
+            // Triem orientació (0 o 1) i coordenada inicial aleatòria
+            int orientacio = (int) (Math.random() * 2);
+            int iInici = (int) (Math.random() * 10);
+            int jInici = (int) (Math.random() * 10);
+
+            // Comprovem si la posició és vàlida
+            if (esPosicioValida(iInici, jInici, mida, orientacio, mapping)) {
+
+                // Creem l'objecte Vaixell
+                Vaixell nouVaixell = new Vaixell(id, mida, orientacio, color, jugador);
+
+                // Guardem TOTES les caselles del vaixell al mapping
+                for (int k = 0; k < mida; k++) {
+                    if (orientacio == Vaixell.HORITZONTAL) {
+                        mapping.put(new Casella(iInici + k, jInici), nouVaixell);
+                    } else {
+                        mapping.put(new Casella(iInici, jInici + k), nouVaixell);
+                    }
+                }
+                colocat = true; // Sortim del bucle while
+            }
+        }
+    }
+
+    private boolean esPosicioValida(int iInici, int jInici, int mida, int orientacio, UnsortedArrayMapping<Casella, Vaixell> mapping) {
+        // Comprovar que no surt de la graella (0 a 9)
+        if (orientacio == Vaixell.HORITZONTAL && iInici + mida > 10) return false;
+        if (orientacio == Vaixell.VERTICAL && jInici + mida > 10) return false;
+
+        // Comprovar col·lisions i veïns (horitzontal, vertical i diagonal)
+        for (int k = 0; k < mida; k++) {
+            // Calculem la coordenada (i, j) exacta de la part del vaixell que estem mirant
+            int currentI = (orientacio == Vaixell.HORITZONTAL) ? iInici + k : iInici;
+            int currentJ = (orientacio == Vaixell.VERTICAL) ? jInici + k : jInici;
+
+            // Mirem la casella actual i les 8 caselles del voltant (di = -1, 0, 1 i dj = -1, 0, 1)
+            for (int di = -1; di <= 1; di++) {
+                for (int dj = -1; dj <= 1; dj++) {
+                    int checkI = currentI + di;
+                    int checkJ = currentJ + dj;
+
+                    // Si la casella a mirar està dins el tauler
+                    if (checkI >= 0 && checkI < 10 && checkJ >= 0 && checkJ < 10) {
+                        //.i ja hi ha un vaixell al mapping, posició invàlida
+                        if (mapping.get(new Casella(checkI, checkJ)) != null) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        return true; // Si ha superat totes les proves, la posició és fantàstica
+    }
+
+    private int getColorPerMida(int mida) {
+        switch (mida) {
+            case 4: return Color.parseColor("#9C27B0"); // Lila
+            case 3: return Color.parseColor("#2196F3"); // Blau
+            case 2: return Color.parseColor("#4CAF50"); // Verd
+            default: return Color.parseColor("#F44336"); // Vermell
         }
     }
 }

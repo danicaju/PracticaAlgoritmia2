@@ -28,4 +28,19 @@ public class Casella {
     public String toString() {
         return "(" + coordenadaX + "," + coordenadaY + ")";
     }
+
+    @Override
+    public boolean equals(Object obj) {
+        // Si és exactament el mateix objecte en memòria, són iguals
+        if (this == obj) return true;
+
+        // Si l'altre objecte és nul o no és una Casella, no són iguals
+        if (obj == null || getClass() != obj.getClass()) return false;
+
+        // Convertim l'objecte genèric a Casella
+        Casella altraCasella = (Casella) obj;
+
+        // Dues caselles són iguals si tenen la mateixa columna (i) i fila (j)
+        return this.coordenadaX == altraCasella.coordenadaX && this.coordenadaY == altraCasella.coordenadaY;
+    }
 }
