@@ -38,7 +38,7 @@ public class MainActivity extends AppCompatActivity {
             tvMissatges.setMovementMethod(new ScrollingMovementMethod());
         }
 
-        // Inicializar botones
+        // Inicializar botons
         btnNouJoc = findViewById(R.id.btn_nou_joc);
         btnConnectar = findViewById(R.id.btn_connectar);
         btnAturar = findViewById(R.id.btn_aturar);
@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
         surfaceJugador = findViewById(R.id.surface_jugador);
         surfaceRival = findViewById(R.id.surface_rival);
 
-        // Retrasar el dibujado hasta que las vistas estén creadas
+        // Dibuixem la graella
         surfaceJugador.post(() -> pintarGraella(surfaceJugador));
         surfaceRival.post(() -> pintarGraella(surfaceRival));
 
@@ -128,39 +128,39 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Método para dibujar la cuadrícula 10x10
+    // Mètode per dibuixar la quadrícula 10x10
     private void pintarGraella(SurfaceView surface) {
         if (surface.getHolder().getSurface().isValid()) {
 
-            // Obtenemos dimensiones
+            // Obtenim dimensions
             int amplada = surface.getWidth();
             int alt = surface.getHeight();
 
-            // Bloqueamos para dibujar
+            // Bloquegem per dibuixar
             Canvas canvas = surface.getHolder().lockCanvas();
 
             if (canvas != null) {
-                // Pintar fondo (Azul mar muy clarito)
+                // Pintar fons
                 canvas.drawColor(Color.parseColor("#D0E8E8"));
 
-                // Preparar el pincel para las líneas
+                // Preparar el pinzell per les línies
                 Paint p = new Paint();
-                p.setColor(Color.parseColor("#90C0C0")); // Color de la línea
+                p.setColor(Color.parseColor("#90C0C0")); // Color de la línia
                 p.setStrokeWidth(3);
 
-                // Calcular la separación entre líneas (10 casillas)
+                // Calcular la separació entre línies (10 caselles)
                 float casellaAmplada = (float) amplada / 10;
                 float casellaAlt = (float) alt / 10;
 
-                // Dibujar 9 líneas verticales y 9 horizontales
+                // Dibuixar 9 línies verticals y 9 horizontals
                 for (int i = 1; i < 10; i++) {
-                    // Línea vertical: (xInicial, yInicial, xFinal, yFinal, pincel)
+                    // Línia vertical: (xInicial, yInicial, xFinal, yFinal, pinzell)
                     canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, alt, p);
-                    // Línea horizontal
+                    // Línia horitzontal
                     canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
                 }
 
-                // Desbloquear y mostrar
+                // Desbloquejar i mostrar
                 surface.getHolder().unlockCanvasAndPost(canvas);
             }
         }
@@ -185,7 +185,6 @@ public class MainActivity extends AppCompatActivity {
 
                     // Calculem la casella (i, j)
                     Casella c = getCasella(localX, localY, surfaceRival);
-                    //
                     processarJugada(c);
                 }
             }
@@ -193,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
             return super.onTouchEvent(event);
         }
 
-        // Métode per convertir coordenades de píxels a índexos de la quadrícula
+        // Mètode per convertir coordenades de píxels a índexos de la quadrícula
         private Casella getCasella(float x, float y, SurfaceView s) {
             float casellaAmplada = (float) s.getWidth() / 10;
             float casellaAlt = (float) s.getHeight() / 10;
