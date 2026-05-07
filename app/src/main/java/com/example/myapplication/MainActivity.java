@@ -15,18 +15,19 @@ import java.util.Iterator;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final boolean ESTAT_ATURADA = false;
-    private static final boolean ESTAT_JUGANT = true;
-    private boolean estatJoc = ESTAT_ATURADA;
-
+    public enum EstatJoc {ATURAT, JUGANT, EN_ESPERA, ACABAT}
+    private EstatJoc estatJoc = EstatJoc.ATURAT; // Iniciem aturats
+    private int tornActual; // 0 = JUGADOR_PROPI, 1 = JUGADOR_RIVAL
     public static final int JUGADOR_PROPI = 0;
     public static final int JUGADOR_RIVAL = 1;
     private ImageButton btnNouJoc, btnConnectar, btnAturar, btnPista;
     private SurfaceView surfaceJugador, surfaceRival;
 
     private UnsortedArraySet<View> conjuntPistes;
-
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> vaixells;
+    private UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> casellesDestapades;
+    private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> casellesEnfonsades;
+    private UnsortedArraySet<Casella> objectiusRobot;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,12 +49,11 @@ public class MainActivity extends AppCompatActivity {
         btnAturar = findViewById(R.id.btn_aturar);
         btnPista = findViewById(R.id.btn_pista);
 
-        actualitzarEstatBotons(ESTAT_ATURADA);
-
-        // Afegir listeners per a cada botó
-        btnNouJoc.setOnClickListener(v -> actualitzarEstatBotons(ESTAT_JUGANT));
-        btnConnectar.setOnClickListener(v -> actualitzarEstatBotons(ESTAT_JUGANT));
-        btnAturar.setOnClickListener(v -> actualitzarEstatBotons(ESTAT_ATURADA));
+        // Assegurem que l'estat inicial és ATURAT i corregim els listeners
+        actualitzarEstatBotons(EstatJoc.ATURAT);
+        btnNouJoc.setOnClickListener(v -> iniciarNouJoc());
+        btnConnectar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.JUGANT));
+        btnAturar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.ATURAT));
 
         // Inicializar SurfaceViews
         surfaceJugador = findViewById(R.id.surface_jugador);
@@ -95,12 +95,23 @@ public class MainActivity extends AppCompatActivity {
 
         // PART DELS VAIXELLS
 
-        // Creem el mapping principal (capacitat 2 jugadors)
+        // Inicialitzem el mapping de la flota intacta
         vaixells = new UnsortedArrayMapping<>(2);
-
-        // Fiquem els sub-mappings de 20 caselles per a cada jugador
         vaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
         vaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+
+        // Inicialitzem les caselles destapades (màxim 100 per tauler)
+        casellesDestapades = new UnsortedArrayMapping<>(2);
+        casellesDestapades.put(JUGADOR_PROPI, new UnsortedArraySet<>(100));
+        casellesDestapades.put(JUGADOR_RIVAL, new UnsortedArraySet<>(100));
+
+        // Inicialitzem les caselles de vaixells tocats/enfonsats
+        casellesEnfonsades = new UnsortedArrayMapping<>(2);
+        casellesEnfonsades.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
+        casellesEnfonsades.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+
+        // Inicialitzem els objectius del robot (màxim 4 veïns: dalt, baix, esquerra, dreta)
+        objectiusRobot = new UnsortedArraySet<>(4);
 
         // Generem tots els vaixells aleatòriament
         crearVaixells();
@@ -118,9 +129,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void actualitzarEstatBotons(boolean nouEstat) {
+    private void actualitzarEstatBotons(EstatJoc nouEstat) {
         estatJoc = nouEstat;
-        if (estatJoc == ESTAT_ATURADA) {
+        // Si el joc està aturat o ha acabat, activem els botons de començar
+        if (estatJoc == EstatJoc.ATURAT || estatJoc == EstatJoc.ACABAT) {
             btnNouJoc.setEnabled(true);
             btnNouJoc.setAlpha(1.0f);
             btnConnectar.setEnabled(true);
@@ -131,7 +143,8 @@ public class MainActivity extends AppCompatActivity {
             btnPista.setEnabled(false);
             btnPista.setAlpha(0.5f);
 
-        } else if (estatJoc == ESTAT_JUGANT) {
+        } else {
+            // Si estem JUGANT o EN_ESPERA, activem els botons d'aturar/pista
             btnNouJoc.setEnabled(false);
             btnNouJoc.setAlpha(0.5f);
             btnConnectar.setEnabled(false);
@@ -146,8 +159,9 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onTouchEvent(android.view.MotionEvent event) {
-        // Només actualitzem quan s'està jugant
-        if (estatJoc == ESTAT_JUGANT) {
+        // Només processem el toc si estem JUGANT i és el NOSTRE TORN
+        if (estatJoc == EstatJoc.JUGANT && tornActual == JUGADOR_PROPI) {
+
             // Només ens interessa quan l'usuari aixeca el dit
             if (event.getAction() == android.view.MotionEvent.ACTION_UP) {
                 float x = event.getX();
@@ -163,12 +177,14 @@ public class MainActivity extends AppCompatActivity {
 
                     // Calculem la casella (i, j)
                     Casella c = getCasella(localX, localY, surfaceRival);
+
+                    // Al proper pas afegirem la comprovació de no repetir caselles
                     processarJugada(c);
                 }
             }
         }
-            return super.onTouchEvent(event);
-        }
+        return super.onTouchEvent(event);
+    }
 
         // Mètode per convertir coordenades de píxels a índexos de la quadrícula
         private Casella getCasella(float x, float y, SurfaceView s) {
@@ -182,30 +198,82 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private void processarJugada(Casella c) {
-            // Actualitzar el TextView de la darrera jugada
-            TextView tvDarreraJugadaTeva = findViewById(R.id.text_darrera_jugada_teva);
-            tvDarreraJugadaTeva.setText("Darrera jugada teva: Casella " + c.getCoordenadaX() + ", " + c.getCoordenadaY());
+            // Obtenim les estructures del rival (qui rep l'atac)
+            UnsortedArrayMapping<Casella, Vaixell> vaixellsRival = vaixells.get(JUGADOR_RIVAL);
+            UnsortedArrayMapping<Casella, Vaixell> enfonsadesRival = casellesEnfonsades.get(JUGADOR_RIVAL);
+            UnsortedArraySet<Casella> destapadesRival = casellesDestapades.get(JUGADOR_RIVAL);
 
-            // Afegir el text l'historial de missatges
             TextView tvMissatges = findViewById(R.id.textViewMissatges);
-            String textActual = tvMissatges.getText().toString();
-            tvMissatges.setText(textActual + "\nHas seleccionat la casella (" + c.getCoordenadaX() + "," + c.getCoordenadaY() + ")");
 
-            // Fer scroll automàtic
-            tvMissatges.post(() -> {
-                android.text.Layout layout = tvMissatges.getLayout();
-                if (layout != null) {
-                    int scrollAmount = layout.getLineTop(tvMissatges.getLineCount()) - tvMissatges.getHeight();
-                    if (scrollAmount > 0) {
-                        tvMissatges.scrollTo(0, scrollAmount);
-                    } else {
-                        tvMissatges.scrollTo(0, 0);
-                    }
+            if (destapadesRival.contains(c)) {
+                tvMissatges.append("\nJa havies atacat la casella " + c.toString() + "!");
+                ferScrollMissatges(tvMissatges);
+                return; // No fem res més
+            }
+
+            destapadesRival.add(c);
+            Vaixell vaixellAtacat = vaixellsRival.get(c);
+
+            if (vaixellAtacat == null) {
+                // ---------- AIGUA ----------
+                tvMissatges.append("\nTu atacs " + c.toString() + " -> AIGUA!");
+
+                // Canvi de torn
+                tornActual = JUGADOR_RIVAL;
+                actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+                tvMissatges.append("\nTorn del rival. El robot està pensant...");
+
+                if (vaixellAtacat == null) {
+                    // ---------- AIGUA ----------
+                    tvMissatges.append("\nTu atacs " + c.toString() + " -> AIGUA!");
+
+                    // Canvi de torn
+                    tornActual = JUGADOR_RIVAL;
+                    actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+                    tvMissatges.append("\nTorn del rival. El robot està pensant...");
+
+                    // El robot actua perquè has fallat!
+                    ferJugadaRobot();
                 }
-            });
 
-            // Repintar el taulell de joc amb la nova casella seleccionada
-            pintaGraelles(c, surfaceRival);
+            } else {
+                // ---------- TOCAT O ENFONSAT ----------
+                vaixellAtacat.rebreTret(); // Sumem 1 al dany del vaixell
+
+                vaixellsRival.remove(c); // Lllevem aquesta coordenada dels vius
+                enfonsadesRival.put(c, vaixellAtacat); // L'afegim als morts
+
+                if (vaixellAtacat.esEnfonsat()) {
+                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> ENFONSAT!");
+                } else {
+                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> TOCAT!");
+                }
+
+                // Comprovem condició de victòria (si no queden vaixells vius al rival)
+                if (vaixellsRival.isEmpty()) {
+                    tvMissatges.append("\n¡HAS GUANYAT LA PARTIDA!");
+                    actualitzarEstatBotons(EstatJoc.ACABAT);
+                } else {
+                    tvMissatges.append("\nContinues tirant tu!");
+                }
+            }
+
+            ferScrollMissatges(tvMissatges);
+
+            // Repintem la graella del rival perquè es vegi el tret
+            surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+        }
+
+    // Mètode d'ajuda per fer l'scroll net
+    private void ferScrollMissatges(TextView tvMissatges) {
+        tvMissatges.post(() -> {
+            android.text.Layout layout = tvMissatges.getLayout();
+            if (layout != null) {
+                int scrollAmount = layout.getLineTop(tvMissatges.getLineCount()) - tvMissatges.getHeight();
+                if (scrollAmount > 0) tvMissatges.scrollTo(0, scrollAmount);
+                else tvMissatges.scrollTo(0, 0);
+            }
+        });
     }
 
     // Mètode per pintar i repintar la graella i mostrar els vaixells
@@ -216,10 +284,10 @@ public class MainActivity extends AppCompatActivity {
             Canvas canvas = surface.getHolder().lockCanvas();
 
             if (canvas != null) {
-                // Netejem el fons
+                // 1. Netejem el fons
                 canvas.drawColor(Color.parseColor("#D0E8E8"));
 
-                // Preparem pincell per la graella
+                // 2. Preparem pincell per la graella
                 Paint p = new Paint();
                 p.setColor(Color.parseColor("#90C0C0"));
                 p.setStrokeWidth(3);
@@ -227,19 +295,21 @@ public class MainActivity extends AppCompatActivity {
                 float casellaAmplada = (float) amplada / 10;
                 float casellaAlt = (float) alt / 10;
 
-                // Dibuixar la quadrícula (Línies)
+                // 3. Dibuixar la quadrícula (Línies)
                 for (int i = 1; i < 10; i++) {
                     canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, alt, p);
                     canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
                 }
 
-                // PINTAR VAIXELLS DEL JUGADOR
+                // ==========================================
+                // DIBUIXAR EL TEU TAULER (SURFACE JUGADOR)
+                // ==========================================
                 if (surface == surfaceJugador && vaixells != null) {
-                    UnsortedArrayMapping<Casella, Vaixell> mappingPropi = vaixells.get(JUGADOR_PROPI);
 
+                    // Pintar els  vaixells vius del jugador propi
+                    UnsortedArrayMapping<Casella, Vaixell> mappingPropi = vaixells.get(JUGADOR_PROPI);
                     if (mappingPropi != null) {
                         Iterator<UnsortedArrayMapping<Casella, Vaixell>.Pair> iterador = mappingPropi.iterator();
-
                         while (iterador.hasNext()) {
                             UnsortedArrayMapping<Casella, Vaixell>.Pair parella = iterador.next();
                             Casella casellaVaixell = parella.getKey();
@@ -250,31 +320,97 @@ public class MainActivity extends AppCompatActivity {
                             pVaixell.setStyle(Paint.Style.FILL);
                             pVaixell.setColor(vaixell.getColor());
 
-                            float esquerra = casellaVaixell.getCoordenadaX() * casellaAmplada;
-                            float dalt = casellaVaixell.getCoordenadaY() * casellaAlt;
-                            float dreta = esquerra + casellaAmplada;
-                            float baix = dalt + casellaAlt;
-                            float radiEsquines = 15f;
+                            float esq = casellaVaixell.getCoordenadaX() * casellaAmplada;
+                            float dlt = casellaVaixell.getCoordenadaY() * casellaAlt;
+                            canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pVaixell);
+                        }
+                    }
 
-                            canvas.drawRoundRect(esquerra + 4, dalt + 4, dreta - 4, baix - 4, radiEsquines, radiEsquines, pVaixell);
+                    // Pintar els atacs rebuts del robot
+                    UnsortedArraySet<Casella> destapadesPropies = casellesDestapades.get(JUGADOR_PROPI);
+                    UnsortedArrayMapping<Casella, Vaixell> enfonsadesPropies = casellesEnfonsades.get(JUGADOR_PROPI);
+
+                    if (destapadesPropies != null) {
+                        Iterator<Casella> itDestapades = destapadesPropies.iterator();
+                        while (itDestapades.hasNext()) {
+                            Casella cDestapada = itDestapades.next();
+                            Vaixell vTocat = enfonsadesPropies.get(cDestapada);
+
+                            float esq = cDestapada.getCoordenadaX() * casellaAmplada;
+                            float dlt = cDestapada.getCoordenadaY() * casellaAlt;
+
+                            if (vTocat == null) {
+                                // Aigua -> Pintem quadrat blanc
+                                Paint pDestapada = new Paint();
+                                pDestapada.setAntiAlias(true);
+                                pDestapada.setColor(Color.WHITE);
+                                pDestapada.setStyle(Paint.Style.FILL);
+                                canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
+                            } else {
+                                // Tocat/Enfonsat -> Bola a sobre del teu vaixell
+                                Paint pPunt = new Paint();
+                                pPunt.setAntiAlias(true);
+                                pPunt.setStyle(Paint.Style.FILL);
+                                // Si està enfonsat, bola VERMELLA. Si no, NEGRA.
+                                pPunt.setColor(vTocat.esEnfonsat() ? Color.RED : Color.BLACK);
+                                canvas.drawCircle(esq + casellaAmplada / 2, dlt + casellaAlt / 2, 8f, pPunt);
+                            }
                         }
                     }
                 }
 
-                // PINTAR SELECCIÓ (Casella vermella al rival)
-                if (c != null && surface == surfaceRival) {
-                    Paint pSeleccio = new Paint();
-                    pSeleccio.setAntiAlias(true);
-                    pSeleccio.setStyle(Paint.Style.FILL);
-                    pSeleccio.setColor(Color.RED);
+                // ==========================================
+                // DIBUIXAR EL TAULER RIVAL (SURFACE RIVAL)
+                // ==========================================
+                if (surface == surfaceRival && casellesDestapades != null) {
 
-                    float esquerra = c.getCoordenadaX() * casellaAmplada;
-                    float dalt = c.getCoordenadaY() * casellaAlt;
-                    float dreta = esquerra + casellaAmplada;
-                    float baix = dalt + casellaAlt;
-                    float radiEsquines = 15f;
+                    // Pintar els teus atacs sobre el rival
+                    UnsortedArraySet<Casella> destapadesRival = casellesDestapades.get(JUGADOR_RIVAL);
+                    UnsortedArrayMapping<Casella, Vaixell> enfonsadesRival = casellesEnfonsades.get(JUGADOR_RIVAL);
 
-                    canvas.drawRoundRect(esquerra + 4, dalt + 4, dreta - 4, baix - 4, radiEsquines, radiEsquines, pSeleccio);
+                    if (destapadesRival != null) {
+                        Iterator<Casella> itDestapades = destapadesRival.iterator();
+                        while (itDestapades.hasNext()) {
+                            Casella cDestapada = itDestapades.next();
+                            Vaixell vTocat = enfonsadesRival.get(cDestapada);
+
+                            float esq = cDestapada.getCoordenadaX() * casellaAmplada;
+                            float dlt = cDestapada.getCoordenadaY() * casellaAlt;
+
+                            Paint pDestapada = new Paint();
+                            pDestapada.setAntiAlias(true);
+                            pDestapada.setStyle(Paint.Style.FILL);
+
+                            if (vTocat == null) {
+                                // Aigua -> Pintem quadrat blanc
+                                pDestapada.setColor(Color.WHITE);
+                                canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
+                            } else {
+                                // Tocat/Enfonsat -> Pintem del color del vaixell i hi posem la bola
+                                pDestapada.setColor(vTocat.getColor());
+                                canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
+
+                                Paint pPunt = new Paint();
+                                pPunt.setAntiAlias(true);
+                                pPunt.setStyle(Paint.Style.FILL);
+                                // Si està enfonsat, bola VERMELLA. Si no, NEGRA.
+                                pPunt.setColor(vTocat.esEnfonsat() ? Color.RED : Color.BLACK);
+                                canvas.drawCircle(esq + casellaAmplada / 2, dlt + casellaAlt / 2, 8f, pPunt);
+                            }
+                        }
+                    }
+
+                    // Pintar selecció activa (Casella vermella transitòria)
+                    if (c != null) {
+                        Paint pSeleccio = new Paint();
+                        pSeleccio.setAntiAlias(true);
+                        pSeleccio.setStyle(Paint.Style.FILL);
+                        pSeleccio.setColor(Color.RED);
+
+                        float esquerra = c.getCoordenadaX() * casellaAmplada;
+                        float dalt = c.getCoordenadaY() * casellaAlt;
+                        canvas.drawRoundRect(esquerra + 4, dalt + 4, esquerra + casellaAmplada - 4, dalt + casellaAlt - 4, 15f, 15f, pSeleccio);
+                    }
                 }
 
                 // Finalment, alliberem i mostrem (Això s'ha d'executar SEMPRE)
@@ -365,5 +501,118 @@ public class MainActivity extends AppCompatActivity {
             case 2: return Color.parseColor("#77DD77"); // Verd
             default: return Color.parseColor("#FF7477"); // Vermell
         }
+    }
+
+    private void iniciarNouJoc() {
+        TextView tvMissatges = findViewById(R.id.textViewMissatges);
+        tvMissatges.setText("--- NOVA PARTIDA ---");
+
+        // Decidim aleatòriament qui comença (0 = Nosaltres, 1 = Rival)
+        tornActual = (int) (Math.random() * 2);
+
+        if (tornActual == JUGADOR_PROPI) {
+            actualitzarEstatBotons(EstatJoc.JUGANT);
+            tvMissatges.append("\nComences tu! Selecciona una casella per atacar.");
+        } else {
+            actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+            tvMissatges.append("\nComença el rival. El robot està pensant...");
+
+            if (tornActual == JUGADOR_PROPI) {
+                actualitzarEstatBotons(EstatJoc.JUGANT);
+                tvMissatges.append("\nComences tu! Selecciona una casella per atacar.");
+            } else {
+                actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+                tvMissatges.append("\nComença el rival. El robot està pensant...");
+
+                // Ara sí que cridem al robot!
+                ferJugadaRobot();
+            }
+        }
+    }
+
+    private void ferJugadaRobot() {
+        // Posem un retard de 400ms perquè sembli que el robot "pensa"
+        surfaceJugador.postDelayed(() -> {
+            if (estatJoc == EstatJoc.ACABAT) return; // Si ja s'ha acabat la partida, no fem res
+
+            UnsortedArrayMapping<Casella, Vaixell> meusVaixells = vaixells.get(JUGADOR_PROPI);
+            UnsortedArrayMapping<Casella, Vaixell> mevesEnfonsades = casellesEnfonsades.get(JUGADOR_PROPI);
+            UnsortedArraySet<Casella> mevesDestapades = casellesDestapades.get(JUGADOR_PROPI);
+
+            Casella casellaObjectiu = null;
+
+            // MODE REMAT: Busquem si tenim algun objectiu pendent de trets anteriors
+            while (!objectiusRobot.isEmpty() && casellaObjectiu == null) {
+                Iterator<Casella> it = objectiusRobot.iterator();
+                Casella candidat = it.next();
+                objectiusRobot.remove(candidat); // El traiem de la llista d'objectius
+
+                // Només és un objectiu vàlid si no l'hem atacat ja
+                if (!mevesDestapades.contains(candidat)) {
+                    casellaObjectiu = candidat;
+                }
+            }
+
+            // MODE CERCA: Si no hi havia objectiu vàlid, tirem aleatòriament
+            if (casellaObjectiu == null) {
+                boolean trobada = false;
+                while (!trobada) {
+                    int rX = (int) (Math.random() * 10);
+                    int rY = (int) (Math.random() * 10);
+                    Casella rC = new Casella(rX, rY);
+                    if (!mevesDestapades.contains(rC)) {
+                        casellaObjectiu = rC;
+                        trobada = true;
+                    }
+                }
+            }
+
+            // PROCESSEM L'ATAC DEL ROBOT (a la nostra graella)
+            mevesDestapades.add(casellaObjectiu);
+            Vaixell vaixellAtacat = meusVaixells.get(casellaObjectiu);
+
+            TextView tvMissatges = findViewById(R.id.textViewMissatges);
+
+            if (vaixellAtacat == null) {
+                // ---------- AIGUA ----------
+                tvMissatges.append("\nEl robot ataca " + casellaObjectiu.toString() + " -> AIGUA!");
+                tornActual = JUGADOR_PROPI;
+                actualitzarEstatBotons(EstatJoc.JUGANT);
+                tvMissatges.append("\nTorn teu. Tira!");
+            } else {
+                // ---------- TOCAT O ENFONSAT ----------
+                vaixellAtacat.rebreTret();
+                meusVaixells.remove(casellaObjectiu);
+                mevesEnfonsades.put(casellaObjectiu, vaixellAtacat);
+
+                if (vaixellAtacat.esEnfonsat()) {
+                    tvMissatges.append("\nEl robot ataca " + casellaObjectiu.toString() + " -> ENFONSAT!");
+                } else {
+                    tvMissatges.append("\nEl robot ataca " + casellaObjectiu.toString() + " -> TOCAT!");
+
+                    // INTEL·LIGÈNCIA: Afegim les caselles veïnes als objectius (Dalt, Baix, Esq, Dreta)
+                    int x = casellaObjectiu.getCoordenadaX();
+                    int y = casellaObjectiu.getCoordenadaY();
+                    if (x > 0) objectiusRobot.add(new Casella(x - 1, y));
+                    if (x < 9) objectiusRobot.add(new Casella(x + 1, y));
+                    if (y > 0) objectiusRobot.add(new Casella(x, y - 1));
+                    if (y < 9) objectiusRobot.add(new Casella(x, y + 1));
+                }
+
+                if (meusVaixells.isEmpty()) {
+                    tvMissatges.append("\n¡EL ROBOT ET GUANYA LA PARTIDA!");
+                    actualitzarEstatBotons(EstatJoc.ACABAT);
+                } else {
+                    tvMissatges.append("\nEl robot torna a tirar...");
+                    ferJugadaRobot(); // Recursivitat: el robot torna a jugar perquè ha encertat
+                }
+            }
+
+            ferScrollMissatges(tvMissatges);
+
+            // Repintem LA TEVA graella perquè es vegi l'atac del robot
+            surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+
+        }, 400); // <-- 400 mil·lisegons de retard
     }
 }

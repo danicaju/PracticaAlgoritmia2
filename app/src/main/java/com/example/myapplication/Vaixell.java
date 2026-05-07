@@ -14,6 +14,8 @@ public class Vaixell {
     private int color;
     private int jugador;
 
+    private int copsRebuts;
+
     // Constructor
     public Vaixell(int id, int mida, int orientacio, int color, int jugador) {
         this.id = id;
@@ -21,6 +23,7 @@ public class Vaixell {
         this.orientacio = orientacio;
         this.color = color;
         this.jugador = jugador;
+        this.copsRebuts=0;
     }
 
     // Mètodes d'accés (Getters)
@@ -43,4 +46,19 @@ public class Vaixell {
     public int getJugador() {
         return jugador;
     }
+
+    public void setContadorMal(int contadorMal) {
+        this.copsRebuts = contadorMal;
+    }
+
+    public void rebreTret() {
+        copsRebuts++;
+    }
+
+    // Mètode per comprovar si el vaixell ja està totalment enfonsat
+    public boolean esEnfonsat() {
+        return copsRebuts >= mida;
+    }
+
+
 }
