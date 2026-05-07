@@ -206,7 +206,7 @@ public class MainActivity extends AppCompatActivity {
             TextView tvMissatges = findViewById(R.id.textViewMissatges);
 
             if (destapadesRival.contains(c)) {
-                tvMissatges.append("\nJa havies atacat la casella " + c.toString() + "!");
+                tvMissatges.append("\nJa havies atacat la casella " + c.toString() + "!\n");
                 ferScrollMissatges(tvMissatges);
                 return; // No fem res més
             }
@@ -216,21 +216,21 @@ public class MainActivity extends AppCompatActivity {
 
             if (vaixellAtacat == null) {
                 // ---------- AIGUA ----------
-                tvMissatges.append("\nTu atacs " + c.toString() + " -> AIGUA!");
+                tvMissatges.append("\nTu atacs " + c.toString() + " -> AIGUA!\n");
 
                 // Canvi de torn
                 tornActual = JUGADOR_RIVAL;
                 actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-                tvMissatges.append("\nTorn del rival. El robot està pensant...");
+                tvMissatges.append("\nTorn del rival. El robot està pensant...\n");
 
                 if (vaixellAtacat == null) {
                     // ---------- AIGUA ----------
-                    tvMissatges.append("\nTu atacs " + c.toString() + " -> AIGUA!");
+                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> AIGUA!\n");
 
                     // Canvi de torn
                     tornActual = JUGADOR_RIVAL;
                     actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-                    tvMissatges.append("\nTorn del rival. El robot està pensant...");
+                    tvMissatges.append("\nTorn del rival. El robot està pensant...\n");
 
                     // El robot actua perquè has fallat!
                     ferJugadaRobot();
@@ -244,17 +244,17 @@ public class MainActivity extends AppCompatActivity {
                 enfonsadesRival.put(c, vaixellAtacat); // L'afegim als morts
 
                 if (vaixellAtacat.esEnfonsat()) {
-                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> ENFONSAT!");
+                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> ENFONSAT!\n");
                 } else {
-                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> TOCAT!");
+                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> TOCAT!\n");
                 }
 
                 // Comprovem condició de victòria (si no queden vaixells vius al rival)
                 if (vaixellsRival.isEmpty()) {
-                    tvMissatges.append("\n¡HAS GUANYAT LA PARTIDA!");
+                    tvMissatges.append("\n¡HAS GUANYAT LA PARTIDA!\n");
                     actualitzarEstatBotons(EstatJoc.ACABAT);
                 } else {
-                    tvMissatges.append("\nContinues tirant tu!");
+                    tvMissatges.append("\nContinues tirant tu!\n");
                 }
             }
 
@@ -512,17 +512,17 @@ public class MainActivity extends AppCompatActivity {
 
         if (tornActual == JUGADOR_PROPI) {
             actualitzarEstatBotons(EstatJoc.JUGANT);
-            tvMissatges.append("\nComences tu! Selecciona una casella per atacar.");
+            tvMissatges.append("\nComences tu! Selecciona una casella per atacar.\n");
         } else {
             actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-            tvMissatges.append("\nComença el rival. El robot està pensant...");
+            tvMissatges.append("\nComença el rival. El robot està pensant...\n");
 
             if (tornActual == JUGADOR_PROPI) {
                 actualitzarEstatBotons(EstatJoc.JUGANT);
-                tvMissatges.append("\nComences tu! Selecciona una casella per atacar.");
+                tvMissatges.append("\nComences tu! Selecciona una casella per atacar.\n");
             } else {
                 actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-                tvMissatges.append("\nComença el rival. El robot està pensant...");
+                tvMissatges.append("\nComença el rival. El robot està pensant...\n");
 
                 // Ara sí que cridem al robot!
                 ferJugadaRobot();
@@ -600,10 +600,10 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 if (meusVaixells.isEmpty()) {
-                    tvMissatges.append("\n¡EL ROBOT ET GUANYA LA PARTIDA!");
+                    tvMissatges.append("\n¡EL ROBOT ET GUANYA LA PARTIDA!\n");
                     actualitzarEstatBotons(EstatJoc.ACABAT);
                 } else {
-                    tvMissatges.append("\nEl robot torna a tirar...");
+                    tvMissatges.append("\nEl robot torna a tirar...\n");
                     ferJugadaRobot(); // Recursivitat: el robot torna a jugar perquè ha encertat
                 }
             }
