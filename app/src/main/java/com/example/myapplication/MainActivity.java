@@ -93,28 +93,11 @@ public class MainActivity extends AppCompatActivity {
         ImageButton btnTancarPistes = findViewById(R.id.btn_tancar_pistes);
         btnTancarPistes.setOnClickListener(v -> canviarVisibilitatPistes(View.GONE));
 
-        // PART DELS VAIXELLS
-
-        // Inicialitzem el mapping de la flota intacta
-        vaixells = new UnsortedArrayMapping<>(2);
-        vaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
-        vaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
-
-        // Inicialitzem les caselles destapades (màxim 100 per tauler)
-        casellesDestapades = new UnsortedArrayMapping<>(2);
-        casellesDestapades.put(JUGADOR_PROPI, new UnsortedArraySet<>(100));
-        casellesDestapades.put(JUGADOR_RIVAL, new UnsortedArraySet<>(100));
-
-        // Inicialitzem les caselles de vaixells tocats/enfonsats
-        casellesEnfonsades = new UnsortedArrayMapping<>(2);
-        casellesEnfonsades.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
-        casellesEnfonsades.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
-
-        // Inicialitzem els objectius del robot (màxim 4 veïns: dalt, baix, esquerra, dreta)
-        objectiusRobot = new UnsortedArraySet<>(4);
-
-        // Generem tots els vaixells aleatòriament
-        crearVaixells();
+        // Assegurem que l'estat inicial és ATURAT i corregim els listeners
+        actualitzarEstatBotons(EstatJoc.ATURAT);
+        btnNouJoc.setOnClickListener(v -> iniciarNouJoc());
+        btnConnectar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.JUGANT));
+        btnAturar.setOnClickListener(v -> aturarJoc());
     }
 
     //Mètode que utilitza l'ITERADOR per recórrer el conjunt i mostrar/amagar
@@ -262,6 +245,12 @@ public class MainActivity extends AppCompatActivity {
 
             // Repintem la graella del rival perquè es vegi el tret
             surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+
+            TextView tvDarreraTeva = findViewById(R.id.text_darrera_jugada_teva);
+            if (tvDarreraTeva != null) {
+                String resumTret = (vaixellAtacat == null) ? "AIGUA" : (vaixellAtacat.esEnfonsat() ? "ENFONSAT" : "TOCAT");
+                tvDarreraTeva.setText("Darrera jugada teva: " + c.toString() + " -> " + resumTret);
+            }
         }
 
     // Mètode d'ajuda per fer l'scroll net
@@ -507,26 +496,44 @@ public class MainActivity extends AppCompatActivity {
         TextView tvMissatges = findViewById(R.id.textViewMissatges);
         tvMissatges.setText("--- NOVA PARTIDA ---");
 
-        // Decidim aleatòriament qui comença (0 = Nosaltres, 1 = Rival)
+        // INICIALITZEM TOTES LES ESTRUCTURES AQUÍ (Al donar-li al Play)
+        vaixells = new UnsortedArrayMapping<>(2);
+        vaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
+        vaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+
+        casellesDestapades = new UnsortedArrayMapping<>(2);
+        casellesDestapades.put(JUGADOR_PROPI, new UnsortedArraySet<>(100));
+        casellesDestapades.put(JUGADOR_RIVAL, new UnsortedArraySet<>(100));
+
+        casellesEnfonsades = new UnsortedArrayMapping<>(2);
+        casellesEnfonsades.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
+        casellesEnfonsades.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+
+        objectiusRobot = new UnsortedArraySet<>(4);
+
+        // Generem els vaixells ara
+        crearVaixells();
+
+        // Repintem els taulells per mostrar els vaixells generats
+        surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+        surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+
+        // Netejem els textos de darrera jugada per la nova partida
+        TextView tvDarreraTeva = findViewById(R.id.text_darrera_jugada_teva);
+        if (tvDarreraTeva != null) tvDarreraTeva.setText("Darrera jugada teva: ");
+        TextView tvDarreraRival = findViewById(R.id.text_darrera_jugada_seva);
+        if (tvDarreraRival != null) tvDarreraRival.setText("Darrera jugada rival: ");
+
+        // Decidim aleatòriament qui comença
         tornActual = (int) (Math.random() * 2);
 
         if (tornActual == JUGADOR_PROPI) {
             actualitzarEstatBotons(EstatJoc.JUGANT);
-            tvMissatges.append("\nComences tu! Selecciona una casella per atacar.\n");
+            tvMissatges.append("\nComences tu! Selecciona una casella per atacar.");
         } else {
             actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-            tvMissatges.append("\nComença el rival. El robot està pensant...\n");
-
-            if (tornActual == JUGADOR_PROPI) {
-                actualitzarEstatBotons(EstatJoc.JUGANT);
-                tvMissatges.append("\nComences tu! Selecciona una casella per atacar.\n");
-            } else {
-                actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-                tvMissatges.append("\nComença el rival. El robot està pensant...\n");
-
-                // Ara sí que cridem al robot!
-                ferJugadaRobot();
-            }
+            tvMissatges.append("\nComença el rival. El robot està pensant...");
+            ferJugadaRobot();
         }
     }
 
@@ -612,7 +619,38 @@ public class MainActivity extends AppCompatActivity {
 
             // Repintem LA TEVA graella perquè es vegi l'atac del robot
             surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+            TextView tvDarreraRival = findViewById(R.id.text_darrera_jugada_seva);
+            if (tvDarreraRival != null) {
+                String resumTretRival = (vaixellAtacat == null) ? "AIGUA" : (vaixellAtacat.esEnfonsat() ? "ENFONSAT" : "TOCAT");
+                tvDarreraRival.setText("Darrera jugada rival: " + casellaObjectiu.toString() + " -> " + resumTretRival);
+            }
 
         }, 400); // <-- 400 mil·lisegons de retard
     }
+
+    // MÈTODE PER ATURAR I NETEJAR EL JOC
+    private void aturarJoc() {
+        actualitzarEstatBotons(EstatJoc.ATURAT);
+
+        // Buidem la memòria de totes les estructures
+        vaixells = null;
+        casellesDestapades = null;
+        casellesEnfonsades = null;
+        objectiusRobot = null;
+
+        // Restablim els textos de la interfície
+        TextView tvMissatges = findViewById(R.id.textViewMissatges);
+        tvMissatges.setText("--- JOC ATURAT ---");
+
+        TextView tvDarreraTeva = findViewById(R.id.text_darrera_jugada_teva);
+        if (tvDarreraTeva != null) tvDarreraTeva.setText("Darrera jugada teva: ");
+
+        TextView tvDarreraRival = findViewById(R.id.text_darrera_jugada_seva);
+        if (tvDarreraRival != null) tvDarreraRival.setText("Darrera jugada rival: ");
+
+        // Repintem els taulells en buit
+        surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+        surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+    }
+
 }
