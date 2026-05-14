@@ -11,6 +11,11 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.Iterator;
 
 public class MainActivity extends AppCompatActivity {
@@ -22,12 +27,15 @@ public class MainActivity extends AppCompatActivity {
     public static final int JUGADOR_RIVAL = 1;
     private ImageButton btnNouJoc, btnConnectar, btnAturar, btnPista;
     private SurfaceView surfaceJugador, surfaceRival;
+    private boolean connectat = false;
 
     private UnsortedArraySet<View> conjuntPistes;
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> vaixells;
     private UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> casellesDestapades;
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> casellesEnfonsades;
     private UnsortedArraySet<Casella> objectiusRobot;
+
+    private GestorWebSocket gestorWebSocket;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,10 +57,38 @@ public class MainActivity extends AppCompatActivity {
         btnAturar = findViewById(R.id.btn_aturar);
         btnPista = findViewById(R.id.btn_pista);
 
+        // Inicialitzar el gestor de WebSocket
+        gestorWebSocket = new GestorWebSocket(
+                new GestorWebSocket.EscoltadorWebSocket() {
+                    @Override
+                    public void enConnectar() {
+                        runOnUiThread(() -> mostrarMissatge("WS: Connectat"));
+                        connectat = true;
+                    }
+                    @Override
+                    public void enRebreMissatge(JSONObject json) {
+                        runOnUiThread(() -> gestionarMissatge(json));
+                    }
+                    @Override
+                    public void enDesconnectar() {
+                        runOnUiThread(() ->
+                                mostrarMissatge("WS: Desconnectat")
+                        );
+                        connectat = false;
+                    }
+                    @Override
+                    public void enError(String error) {
+                        runOnUiThread(() ->
+                                mostrarMissatge("WS: Error: " + error)
+                        );
+                    }
+                }
+        );
+
         // Assegurem que l'estat inicial és ATURAT i corregim els listeners
         actualitzarEstatBotons(EstatJoc.ATURAT);
         btnNouJoc.setOnClickListener(v -> iniciarNouJoc());
-        btnConnectar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.JUGANT));
+        btnConnectar.setOnClickListener(v -> gestorWebSocket.connectar("wss://hci.uib.es/ws"));
         btnAturar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.ATURAT));
 
         // Inicializar SurfaceViews
@@ -92,12 +128,6 @@ public class MainActivity extends AppCompatActivity {
         // Configurar el botó per amagar el panell
         ImageButton btnTancarPistes = findViewById(R.id.btn_tancar_pistes);
         btnTancarPistes.setOnClickListener(v -> canviarVisibilitatPistes(View.GONE));
-
-        // Assegurem que l'estat inicial és ATURAT i corregim els listeners
-        actualitzarEstatBotons(EstatJoc.ATURAT);
-        btnNouJoc.setOnClickListener(v -> iniciarNouJoc());
-        btnConnectar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.JUGANT));
-        btnAturar.setOnClickListener(v -> aturarJoc());
     }
 
     //Mètode que utilitza l'iterador per recórrer el conjunt i mostrar/amagar
@@ -112,7 +142,305 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-// Mètode per actualitzar els estats dels botons, habilitant o deshabilitant els corresponents
+    // GESTIONAR MISSATGES DEL SERVIDOR
+    private void gestionarMissatge(JSONObject json) {
+        String tipus = json.optString("tipus",""); // Llegim el tipus de missatge
+
+        switch (tipus) {
+            case "connectat":
+                mostrarMissatge("El servidor ens ha acceptat la connexió.");
+                // Quan ens connectem, ens hem de registrar amb la nostra flota
+                enviarRegistrar("Tomatito");
+                break;
+            case "registre_acceptat":
+                mostrarMissatge("Registre correcte. Cercant partida...");
+                enviarCercarPartida();
+                break;
+            case "esperant_rival":
+                mostrarMissatge("Esperant rival...");
+                break;
+            case "partida_trobada":
+                gestionarPartidaTrobada(json);
+                break;
+            case "tir_rebut":
+                gestionarTirRebut(json);
+                break;
+            case "resultat_tir":
+                gestionarResultatTir(json);
+                break;
+            case "rival_ha_sortit":
+            case "rival_desconnectat":
+                mostrarMissatge("El rival ha fugit de la partida!");
+                gestionarAturaPartida();
+                break;
+            case "error":
+                mostrarMissatge("ERROR: " + json.optString("missatge"));
+                break;
+            default:
+                mostrarMissatge("Missatge desconegut: " + json.toString());
+                break;
+        }
+    }
+
+    // ENVIAMENT DE MISSATGES I JSON
+    private void enviarRegistrar(String nomUsuari) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("tipus", "registrar");
+            json.put("nomUsuari", nomUsuari);
+
+            // Si la flota no està creada, la creem abans d'enviar
+            if (vaixells == null) {
+                vaixells = new UnsortedArrayMapping<>(2);
+                vaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
+                vaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+                casellesDestapades = new UnsortedArrayMapping<>(2);
+                casellesDestapades.put(JUGADOR_PROPI, new UnsortedArraySet<>(100));
+                casellesDestapades.put(JUGADOR_RIVAL, new UnsortedArraySet<>(100));
+                casellesEnfonsades = new UnsortedArrayMapping<>(2);
+                casellesEnfonsades.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
+                casellesEnfonsades.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+                crearVaixells();
+                surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+            }
+
+            json.put("vaixells", construirJsonVaixells(JUGADOR_PROPI));
+            gestorWebSocket.enviar(json);
+
+        } catch (JSONException e) {
+            mostrarMissatge("Error enviant registre: " + e.getMessage());
+        }
+    }
+
+    private JSONObject construirJsonVaixells(int jugador) throws JSONException {
+        JSONObject jsonVaixells = new JSONObject();
+        JSONArray jsonCasellesVaixellsVius = new JSONArray();
+
+        UnsortedArrayMapping<Casella, Vaixell> meusVaixells = vaixells.get(jugador);
+
+        if (meusVaixells != null) {
+            Iterator<UnsortedArrayMapping<Casella, Vaixell>.Pair> iterador = meusVaixells.iterator();
+
+            while (iterador.hasNext()) {
+                UnsortedArrayMapping<Casella, Vaixell>.Pair parella = iterador.next();
+                Casella c = parella.getKey();
+                Vaixell v = parella.getValue();
+
+                JSONObject jsonCasella = new JSONObject();
+                jsonCasella.put("i", c.getCoordenadaX());
+                jsonCasella.put("j", c.getCoordenadaY());
+
+                JSONObject jsonVaixell = new JSONObject();
+                jsonVaixell.put("mida", v.getMida());
+                jsonVaixell.put("orientacio", v.getOrientacio());
+                jsonVaixell.put("color", v.getColor());
+                jsonVaixell.put("id", String.valueOf(v.getId()));
+
+                JSONObject jsonEntrada = new JSONObject();
+                jsonEntrada.put("casella", jsonCasella);
+                jsonEntrada.put("vaixell", jsonVaixell);
+
+                jsonCasellesVaixellsVius.put(jsonEntrada);
+            }
+        }
+        jsonVaixells.put("casellesVaixellsVius", jsonCasellesVaixellsVius);
+        return jsonVaixells;
+    }
+
+    private void enviarCercarPartida() {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("tipus", "cercar_partida");
+            gestorWebSocket.enviar(json);
+        } catch (JSONException e) {
+            mostrarMissatge("Error enviant cercar partida: " + e.getMessage());
+        }
+    }
+    // Mètodes buits per evitar errors. Els omplirem al Pas 5.
+    private void gestionarPartidaTrobada(JSONObject json) {
+        boolean etToca = json.optBoolean("etToca", false);
+        JSONObject rival = json.optJSONObject("rival");
+        String nomRival = "Desconegut";
+
+        if (rival != null) {
+            nomRival = rival.optString("nomUsuari");
+            JSONObject vaixellsRival = rival.optJSONObject("vaixells");
+            if (vaixellsRival != null) {
+                carregarVaixellsRival(vaixellsRival);
+            }
+        }
+
+        mostrarMissatge("¡Partida trobada contra " + nomRival + "!");
+
+        if (etToca) {
+            tornActual = JUGADOR_PROPI;
+            actualitzarEstatBotons(EstatJoc.JUGANT);
+            mostrarMissatge("Comences tu! Selecciona una casella.");
+        } else {
+            tornActual = JUGADOR_RIVAL;
+            actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+            mostrarMissatge("Comença el rival. Esperant el seu atac...");
+        }
+    }
+
+    private void carregarVaixellsRival(JSONObject jsonVaixells) {
+        try {
+            org.json.JSONArray arr = jsonVaixells.getJSONArray("casellesVaixellsVius");
+            UnsortedArrayMapping<Casella, Vaixell> mappingRival = vaixells.get(JUGADOR_RIVAL);
+
+            for (int k = 0; k < arr.length(); k++) {
+                JSONObject element = arr.getJSONObject(k);
+                JSONObject jsonCasella = element.getJSONObject("casella");
+                JSONObject jsonVaixell = element.getJSONObject("vaixell");
+
+                // En JSON: i = columna (X), j = fila (Y)
+                Casella c = new Casella(jsonCasella.getInt("i"), jsonCasella.getInt("j"));
+
+                Vaixell v = new Vaixell(
+                        k, // Usem la k com a ID provisional
+                        jsonVaixell.getInt("mida"),
+                        jsonVaixell.getInt("orientacio"),
+                        jsonVaixell.getInt("color"),
+                        JUGADOR_RIVAL
+                );
+
+                mappingRival.put(c, v);
+            }
+        } catch (org.json.JSONException e) {
+            mostrarMissatge("Error carregant flota rival: " + e.getMessage());
+        }
+    }
+    // ENVIAR UN ATAC
+    private void enviarTirar(Casella c) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("tipus", "tirar");
+            json.put("fila", c.getCoordenadaY());    // Y = Fila
+            json.put("columna", c.getCoordenadaX()); // X = Columna
+            gestorWebSocket.enviar(json);
+        } catch (org.json.JSONException e) {
+            mostrarMissatge("Error enviant tir: " + e.getMessage());
+        }
+    }
+
+    // REBRE EL RESULTAT DEL NOSTRE ATAC
+    private void gestionarResultatTir(JSONObject json) {
+        try {
+            int fila = json.getInt("fila");
+            int columna = json.getInt("columna");
+            String resultat = json.getString("resultat");
+            boolean acabat = json.optBoolean("acabat", false);
+
+            Casella c = new Casella(columna, fila);
+
+            UnsortedArrayMapping<Casella, Vaixell> vaixellsRival = vaixells.get(JUGADOR_RIVAL);
+            UnsortedArrayMapping<Casella, Vaixell> enfonsadesRival = casellesEnfonsades.get(JUGADOR_RIVAL);
+            UnsortedArraySet<Casella> destapadesRival = casellesDestapades.get(JUGADOR_RIVAL);
+
+            destapadesRival.add(c);
+            Vaixell vaixellAtacat = vaixellsRival.get(c);
+
+            if (resultat.equals("aigua")) {
+                mostrarMissatge("El teu atac a " + c.toString() + " -> AIGUA!");
+                tornActual = JUGADOR_RIVAL;
+                actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+            } else {
+                if (vaixellAtacat != null) {
+                    vaixellAtacat.rebreTret();
+                    vaixellsRival.remove(c);
+                    enfonsadesRival.put(c, vaixellAtacat);
+                }
+                mostrarMissatge("El teu atac a " + c.toString() + " -> " + resultat.toUpperCase() + "!");
+
+                if (acabat) {
+                    mostrarMissatge("¡HAS GUANYAT LA PARTIDA ONLINE!");
+                    actualitzarEstatBotons(EstatJoc.ACABAT);
+                } else {
+                    mostrarMissatge("Continues tirant tu!");
+                }
+            }
+            surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+
+        } catch (org.json.JSONException e) {
+            mostrarMissatge("Error processant resultat: " + e.getMessage());
+        }
+    }
+
+    // GESTIONAR UN TIR REBUT PEL RIVAL
+    private void gestionarTirRebut(JSONObject json) {
+        try {
+            int fila = json.getInt("fila");
+            int columna = json.getInt("columna");
+            Casella c = new Casella(columna, fila);
+
+            UnsortedArrayMapping<Casella, Vaixell> meusVaixells = vaixells.get(JUGADOR_PROPI);
+            UnsortedArrayMapping<Casella, Vaixell> mevesEnfonsades = casellesEnfonsades.get(JUGADOR_PROPI);
+            UnsortedArraySet<Casella> mevesDestapades = casellesDestapades.get(JUGADOR_PROPI);
+
+            mevesDestapades.add(c);
+            Vaixell vaixellAtacat = meusVaixells.get(c);
+
+            String resultatStr = "aigua";
+            boolean acabat = false;
+
+            if (vaixellAtacat == null) {
+                mostrarMissatge("El rival ataca " + c.toString() + " -> AIGUA!");
+                tornActual = JUGADOR_PROPI;
+                actualitzarEstatBotons(EstatJoc.JUGANT);
+            } else {
+                vaixellAtacat.rebreTret();
+                meusVaixells.remove(c);
+                mevesEnfonsades.put(c, vaixellAtacat);
+
+                if (vaixellAtacat.esEnfonsat()) resultatStr = "enfonsat";
+                else resultatStr = "tocat";
+
+                mostrarMissatge("El rival ataca " + c.toString() + " -> " + resultatStr.toUpperCase() + "!");
+
+                if (meusVaixells.isEmpty()) {
+                    acabat = true;
+                    mostrarMissatge("¡EL RIVAL HA GUANYAT LA PARTIDA ONLINE!");
+                    actualitzarEstatBotons(EstatJoc.ACABAT);
+                }
+            }
+
+            // Avisem al servidor del resultat
+            enviarResultatTir(fila, columna, resultatStr, acabat);
+            surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
+
+        } catch (org.json.JSONException e) {
+            mostrarMissatge("Error rebent tir: " + e.getMessage());
+        }
+    }
+
+    private void enviarResultatTir(int fila, int columna, String resultat, boolean acabat) {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("tipus", "resultat_tir");
+            json.put("fila", fila);
+            json.put("columna", columna);
+            json.put("resultat", resultat);
+            json.put("acabat", acabat);
+            gestorWebSocket.enviar(json);
+        } catch (org.json.JSONException e) {
+            mostrarMissatge("Error enviant resultat_tir: " + e.getMessage());
+        }
+    }
+
+    private void gestionarAturaPartida() {
+        aturarJoc();
+    }
+
+    // Mètode mostrarMissatges per mostrar un missatge al tvMissatges
+    public void mostrarMissatge(String missatge) {
+        TextView tvMissatges = findViewById(R.id.textViewMissatges);
+        if (tvMissatges != null) {
+            tvMissatges.append("\n" + missatge + "\n");
+            ferScrollMissatges(tvMissatges);
+        }
+    }
+
+    // Mètode per actualitzar els estats dels botons, habilitant o deshabilitant els corresponents
     private void actualitzarEstatBotons(EstatJoc nouEstat) {
         estatJoc = nouEstat;
         // Si el joc està aturat o ha acabat, activem els botons de començar
@@ -181,6 +509,15 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private void processarJugada(Casella c) {
+            if (connectat) {
+                UnsortedArraySet<Casella> destapadesRival = casellesDestapades.get(JUGADOR_RIVAL);
+                if (destapadesRival.contains(c)) {
+                    mostrarMissatge("Ja havies atacat la casella " + c.toString() + "!");
+                    return;
+                }
+                enviarTirar(c);
+                return; // Aturem aquí. L'actualització es farà quan rebem 'resultat_tir'
+            }
             // Obtenim les estructures del rival (qui rep l'atac)
             UnsortedArrayMapping<Casella, Vaixell> vaixellsRival = vaixells.get(JUGADOR_RIVAL);
             UnsortedArrayMapping<Casella, Vaixell> enfonsadesRival = casellesEnfonsades.get(JUGADOR_RIVAL);
