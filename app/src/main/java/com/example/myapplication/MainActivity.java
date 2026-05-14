@@ -69,10 +69,10 @@ public class MainActivity extends AppCompatActivity {
         textPistesJugador.setMovementMethod(new ScrollingMovementMethod());
         textPistesRival.setMovementMethod(new ScrollingMovementMethod());
 
-        // Inicialitzem el conjunt
+        // Inicialitzem el conjunt de pistes
         conjuntPistes = new UnsortedArraySet<>(8);
 
-        // Afegim els elements de la interfície al conjunt
+        // Afegim els elements de pistes al conjunt
         conjuntPistes.add(findViewById(R.id.layout_pistes));
         conjuntPistes.add(findViewById(R.id.btn_tancar_pistes));
         conjuntPistes.add(findViewById(R.id.titol_pistes_jugador));
@@ -89,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
             canviarVisibilitatPistes(View.VISIBLE);
         });
 
-        // Configurar el botó "X" per amagar el panell
+        // Configurar el botó per amagar el panell
         ImageButton btnTancarPistes = findViewById(R.id.btn_tancar_pistes);
         btnTancarPistes.setOnClickListener(v -> canviarVisibilitatPistes(View.GONE));
 
@@ -100,7 +100,7 @@ public class MainActivity extends AppCompatActivity {
         btnAturar.setOnClickListener(v -> aturarJoc());
     }
 
-    //Mètode que utilitza l'ITERADOR per recórrer el conjunt i mostrar/amagar
+    //Mètode que utilitza l'iterador per recórrer el conjunt i mostrar/amagar
     private void canviarVisibilitatPistes(int visibilitat) {
         Iterator<View> iterador = conjuntPistes.iterator();
 
@@ -112,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+// Mètode per actualitzar els estats dels botons, habilitant o deshabilitant els corresponents
     private void actualitzarEstatBotons(EstatJoc nouEstat) {
         estatJoc = nouEstat;
         // Si el joc està aturat o ha acabat, activem els botons de començar
@@ -139,7 +140,7 @@ public class MainActivity extends AppCompatActivity {
             btnPista.setAlpha(1.0f);
         }
     }
-
+// Mètode per processar el joc a partir d'un toc per part de l'usuari
     @Override
     public boolean onTouchEvent(android.view.MotionEvent event) {
         // Només processem el toc si estem JUGANT i és el NOSTRE TORN
@@ -158,10 +159,9 @@ public class MainActivity extends AppCompatActivity {
                     float localX = x - surfaceRival.getX();
                     float localY = y - surfaceRival.getY();
 
-                    // Calculem la casella (i, j)
+                    // Calculem la casella (x, y)
                     Casella c = getCasella(localX, localY, surfaceRival);
 
-                    // Al proper pas afegirem la comprovació de no repetir caselles
                     processarJugada(c);
                 }
             }
@@ -187,38 +187,27 @@ public class MainActivity extends AppCompatActivity {
             UnsortedArraySet<Casella> destapadesRival = casellesDestapades.get(JUGADOR_RIVAL);
 
             TextView tvMissatges = findViewById(R.id.textViewMissatges);
-
+            // Si el jugador ja havia disparat a aquella casella
             if (destapadesRival.contains(c)) {
                 tvMissatges.append("\nJa havies atacat la casella " + c.toString() + "!\n");
                 ferScrollMissatges(tvMissatges);
                 return; // No fem res més
             }
-
+            // Sinó, l'afegim a les destapades i provam a atacar-la
             destapadesRival.add(c);
             Vaixell vaixellAtacat = vaixellsRival.get(c);
-
+            // Si no s'ha atacat el vaixell és aigua i canviam de torn, i sinó, és tocat o enfonsat i continua jugant
             if (vaixellAtacat == null) {
                 // ---------- AIGUA ----------
-                tvMissatges.append("\nTu atacs " + c.toString() + " -> AIGUA!\n");
+                tvMissatges.append("\nEl teu atac " + c.toString() + " -> AIGUA!\n");
 
                 // Canvi de torn
                 tornActual = JUGADOR_RIVAL;
                 actualitzarEstatBotons(EstatJoc.EN_ESPERA);
                 tvMissatges.append("\nTorn del rival. El robot està pensant...\n");
 
-                if (vaixellAtacat == null) {
-                    // ---------- AIGUA ----------
-                    tvMissatges.append("\nEl teu atac " + c.toString() + " -> AIGUA!\n");
-
-                    // Canvi de torn
-                    tornActual = JUGADOR_RIVAL;
-                    actualitzarEstatBotons(EstatJoc.EN_ESPERA);
-                    tvMissatges.append("\nTorn del rival. El robot està pensant...\n");
-
-                    // El robot actua perquè has fallat!
-                    ferJugadaRobot();
-                }
-
+                // El robot actua perquè has fallat!
+                ferJugadaRobot();
             } else {
                 // ---------- TOCAT O ENFONSAT ----------
                 vaixellAtacat.rebreTret(); // Sumem 1 al dany del vaixell
@@ -243,7 +232,7 @@ public class MainActivity extends AppCompatActivity {
 
             ferScrollMissatges(tvMissatges);
 
-            // Repintem la graella del rival perquè es vegi el tret
+            // Repintem la graella del rival perquè es vegi el resultat de la jugada
             surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
 
             TextView tvDarreraTeva = findViewById(R.id.text_darrera_jugada_teva);
@@ -290,9 +279,7 @@ public class MainActivity extends AppCompatActivity {
                     canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
                 }
 
-                // ==========================================
-                // DIBUIXAR EL TEU TAULER (SURFACE JUGADOR)
-                // ==========================================
+                // DIBUIXAR SURFACE JUGADOR
                 if (surface == surfaceJugador && vaixells != null) {
 
                     // Pintar els  vaixells vius del jugador propi
@@ -328,15 +315,19 @@ public class MainActivity extends AppCompatActivity {
                             float esq = cDestapada.getCoordenadaX() * casellaAmplada;
                             float dlt = cDestapada.getCoordenadaY() * casellaAlt;
 
+                            Paint pDestapada = new Paint();
+                            pDestapada.setAntiAlias(true);
+                            pDestapada.setStyle(Paint.Style.FILL);
+
                             if (vTocat == null) {
-                                // Aigua -> Pintem quadrat blanc
-                                Paint pDestapada = new Paint();
-                                pDestapada.setAntiAlias(true);
+                                // Aigua: Pintem quadrat blanc
                                 pDestapada.setColor(Color.WHITE);
-                                pDestapada.setStyle(Paint.Style.FILL);
                                 canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
                             } else {
-                                // Tocat/Enfonsat -> Bola a sobre del teu vaixell
+                                // Tocat/Enfonsat: Pintem del color del vaixell i hi posem la bola
+                                pDestapada.setColor(vTocat.getColor());
+                                canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
+
                                 Paint pPunt = new Paint();
                                 pPunt.setAntiAlias(true);
                                 pPunt.setStyle(Paint.Style.FILL);
@@ -348,9 +339,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
-                // ==========================================
-                // DIBUIXAR EL TAULER RIVAL (SURFACE RIVAL)
-                // ==========================================
+                // DIBUIXAR EL SURFACE RIVAL
                 if (surface == surfaceRival && casellesDestapades != null) {
 
                     // Pintar els teus atacs sobre el rival
@@ -371,11 +360,11 @@ public class MainActivity extends AppCompatActivity {
                             pDestapada.setStyle(Paint.Style.FILL);
 
                             if (vTocat == null) {
-                                // Aigua -> Pintem quadrat blanc
+                                // Aigua: Pintem quadrat blanc
                                 pDestapada.setColor(Color.WHITE);
                                 canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
                             } else {
-                                // Tocat/Enfonsat -> Pintem del color del vaixell i hi posem la bola
+                                // Tocat/Enfonsat: Pintem del color del vaixell i hi posem la bola
                                 pDestapada.setColor(vTocat.getColor());
                                 canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pDestapada);
 
@@ -625,7 +614,7 @@ public class MainActivity extends AppCompatActivity {
                 tvDarreraRival.setText("Darrera jugada rival: " + casellaObjectiu.toString() + " -> " + resumTretRival);
             }
 
-        }, 400); // <-- 400 mil·lisegons de retard
+        }, 400); // 400 mil·lisegons de retard
     }
 
     // MÈTODE PER ATURAR I NETEJAR EL JOC
