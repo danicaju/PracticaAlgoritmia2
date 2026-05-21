@@ -90,8 +90,18 @@ public class MainActivity extends AppCompatActivity {
         // Inicializar SurfaceViews i dibuixar la graella buida
         surfaceJugador = findViewById(R.id.surface_jugador);
         surfaceRival = findViewById(R.id.surface_rival);
-        surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
-        surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+        // Afegim un Callback perquè es repinti automàticament al tornar a l'app
+        surfaceJugador.getHolder().addCallback(new android.view.SurfaceHolder.Callback() {
+            @Override public void surfaceCreated(android.view.SurfaceHolder holder) { pintaGraelles(null, surfaceJugador); }
+            @Override public void surfaceChanged(android.view.SurfaceHolder holder, int format, int width, int height) {}
+            @Override public void surfaceDestroyed(android.view.SurfaceHolder holder) {}
+        });
+
+        surfaceRival.getHolder().addCallback(new android.view.SurfaceHolder.Callback() {
+            @Override public void surfaceCreated(android.view.SurfaceHolder holder) { pintaGraelles(null, surfaceRival); }
+            @Override public void surfaceChanged(android.view.SurfaceHolder holder, int format, int width, int height) {}
+            @Override public void surfaceDestroyed(android.view.SurfaceHolder holder) {}
+        });
 
         // Fem desplaçables els textos de les pistes
         TextView textPistesJugador = findViewById(R.id.text_pistes_jugador);
@@ -168,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
             case "connectat":
                 mostrarMissatge("El servidor ens ha acceptat la connexió.");
                 // Quan ens connectem, ens hem de registrar amb la nostra flota
-                enviarRegistrar("Tomatito");
+                enviarRegistrar("BuCaSa");
                 break;
             case "registre_acceptat":
                 mostrarMissatge("Registre correcte. Cercant partida...");
@@ -205,7 +215,8 @@ public class MainActivity extends AppCompatActivity {
             JSONObject json = new JSONObject();
             json.put("tipus", "registrar");
             json.put("nomUsuari", nomUsuari);
-
+            // Inicialització de jugades
+            historialJugades = new LinkedListQueue<>();
             // Si la flota no està creada, la creem abans d'enviar
             if (vaixells == null) {
                 vaixells = new UnsortedArrayMapping<>(2);
@@ -217,6 +228,11 @@ public class MainActivity extends AppCompatActivity {
                 casellesEnfonsades = new UnsortedArrayMapping<>(2);
                 casellesEnfonsades.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(20));
                 casellesEnfonsades.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
+
+                inventariVaixells = new UnsortedArrayMapping<>(2);
+                inventariVaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(10));
+                inventariVaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(10));
+
                 crearVaixells();
                 surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
             }
@@ -458,7 +474,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void gestionarAturaPartida() {
-        aturarJoc();
+        // Si la partida ja ha acabat, ignorem si el rival fuig, estem veient el resum
+        if (estatJoc != EstatJoc.ACABAT) {
+            aturarJoc();
+        }
     }
 
     // Mètode mostrarMissatges per mostrar un missatge al tvMissatges
@@ -1056,6 +1075,12 @@ public class MainActivity extends AppCompatActivity {
         ImageButton btnTancar = dialog.findViewById(R.id.btnTancarResum);
         btnTancar.setOnClickListener(v -> {
             dialog.dismiss();
+            // Si estàvem online, ens desconnectem per tancar-ho bé
+            if (connectat) {
+                enviarSortirPartida();
+                gestorWebSocket.tancar();
+                connectat = false;
+            }
             aturarJoc(); // Reiniciem el joc en tancar el resum
         });
 
@@ -1092,8 +1117,8 @@ public class MainActivity extends AppCompatActivity {
         task[0] = new Runnable() {
             @Override
             public void run() {
-                // Comprovem si queden jugades a la nostra cua
-                if (!historialJugades.isEmpty()) {
+                // Comprovem si l'historial existeix i si queden jugades a la nostra cua
+                if (historialJugades != null && !historialJugades.isEmpty()) {
 
                     // Agafem la primera jugada de la cua (la més antiga)
                     Jugada j = historialJugades.getFirst();
