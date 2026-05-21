@@ -11,12 +11,13 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.util.Iterator;
+import android.app.Dialog;
+import android.os.Handler;
+import android.os.Looper;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,8 +35,9 @@ public class MainActivity extends AppCompatActivity {
     private UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> casellesDestapades;
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> casellesEnfonsades;
     private UnsortedArraySet<Casella> objectiusRobot;
-
     private GestorWebSocket gestorWebSocket;
+    private LinkedListQueue<Jugada> historialJugades;
+    private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>>> inventariVaixells;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -85,17 +87,9 @@ public class MainActivity extends AppCompatActivity {
                 }
         );
 
-        // Assegurem que l'estat inicial és ATURAT i corregim els listeners
-        actualitzarEstatBotons(EstatJoc.ATURAT);
-        btnNouJoc.setOnClickListener(v -> iniciarNouJoc());
-        btnConnectar.setOnClickListener(v -> gestorWebSocket.connectar("wss://hci.uib.es/ws"));
-        btnAturar.setOnClickListener(v -> actualitzarEstatBotons(EstatJoc.ATURAT));
-
-        // Inicializar SurfaceViews
+        // Inicializar SurfaceViews i dibuixar la graella buida
         surfaceJugador = findViewById(R.id.surface_jugador);
         surfaceRival = findViewById(R.id.surface_rival);
-
-        // Dibuixem la graella i els vaixells
         surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
         surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
 
@@ -105,10 +99,8 @@ public class MainActivity extends AppCompatActivity {
         textPistesJugador.setMovementMethod(new ScrollingMovementMethod());
         textPistesRival.setMovementMethod(new ScrollingMovementMethod());
 
-        // Inicialitzem el conjunt de pistes
+        // Inicialitzem el conjunt de pistes i els seus botons
         conjuntPistes = new UnsortedArraySet<>(8);
-
-        // Afegim els elements de pistes al conjunt
         conjuntPistes.add(findViewById(R.id.layout_pistes));
         conjuntPistes.add(findViewById(R.id.btn_tancar_pistes));
         conjuntPistes.add(findViewById(R.id.titol_pistes_jugador));
@@ -118,16 +110,42 @@ public class MainActivity extends AppCompatActivity {
         conjuntPistes.add(findViewById(R.id.text_percentatge_jugador));
         conjuntPistes.add(findViewById(R.id.text_percentatge_rival));
 
-        // Configurar el botó Pista per mostrar el panell
         btnPista.setOnClickListener(v -> {
-            // Aquí en un futur es generarà el text de les pistes.
-            // De moment només mostrem el conjunt.
+            generarTextPistes();
             canviarVisibilitatPistes(View.VISIBLE);
         });
 
-        // Configurar el botó per amagar el panell
         ImageButton btnTancarPistes = findViewById(R.id.btn_tancar_pistes);
         btnTancarPistes.setOnClickListener(v -> canviarVisibilitatPistes(View.GONE));
+
+        actualitzarEstatBotons(EstatJoc.ATURAT); // Estat per defecte en obrir l'app
+
+        btnNouJoc.setOnClickListener(v -> iniciarNouJoc());
+
+        btnConnectar.setOnClickListener(v -> {
+            gestorWebSocket.connectar("wss://hci.uib.es/ws");
+            actualitzarEstatBotons(EstatJoc.EN_ESPERA);
+            mostrarMissatge("Connectant al servidor remot de la UIB...");
+        });
+
+        btnAturar.setOnClickListener(v -> {
+            if (connectat) {
+                enviarSortirPartida(); // Avisem al rival si fugim a mitges
+                gestorWebSocket.tancar(); // Tanquem el socket
+                connectat = false;
+            }
+            aturarJoc(); // Netejem els taulells i memòria
+        });
+    }
+    // Mètode per quan se surt en mig d'una partida online
+    private void enviarSortirPartida() {
+        try {
+            JSONObject json = new JSONObject();
+            json.put("tipus", "sortir_partida");
+            gestorWebSocket.enviar(json);
+        } catch (JSONException e) {
+            mostrarMissatge("Error enviant sortir_partida: " + e.getMessage());
+        }
     }
 
     //Mètode que utilitza l'iterador per recórrer el conjunt i mostrar/amagar
@@ -177,7 +195,6 @@ public class MainActivity extends AppCompatActivity {
                 mostrarMissatge("ERROR: " + json.optString("missatge"));
                 break;
             default:
-                mostrarMissatge("Missatge desconegut: " + json.toString());
                 break;
         }
     }
@@ -285,24 +302,34 @@ public class MainActivity extends AppCompatActivity {
 
     private void carregarVaixellsRival(JSONObject jsonVaixells) {
         try {
-            org.json.JSONArray arr = jsonVaixells.getJSONArray("casellesVaixellsVius");
+            JSONArray arr = jsonVaixells.getJSONArray("casellesVaixellsVius");
+
+            // Destruïm el mapa ple de vaixells fantasma i en creem un de net
+            vaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
             UnsortedArrayMapping<Casella, Vaixell> mappingRival = vaixells.get(JUGADOR_RIVAL);
+
+            UnsortedArrayMapping<String, Vaixell> vaixellsUnics = new UnsortedArrayMapping<>(10);
+            int nextIdLocal = 0;
 
             for (int k = 0; k < arr.length(); k++) {
                 JSONObject element = arr.getJSONObject(k);
                 JSONObject jsonCasella = element.getJSONObject("casella");
                 JSONObject jsonVaixell = element.getJSONObject("vaixell");
 
-                // En JSON: i = columna (X), j = fila (Y)
                 Casella c = new Casella(jsonCasella.getInt("i"), jsonCasella.getInt("j"));
+                String idOriginal = jsonVaixell.getString("id");
 
-                Vaixell v = new Vaixell(
-                        k, // Usem la k com a ID provisional
-                        jsonVaixell.getInt("mida"),
-                        jsonVaixell.getInt("orientacio"),
-                        jsonVaixell.getInt("color"),
-                        JUGADOR_RIVAL
-                );
+                Vaixell v = vaixellsUnics.get(idOriginal);
+                if (v == null) {
+                    v = new Vaixell(
+                            nextIdLocal++,
+                            jsonVaixell.getInt("mida"),
+                            jsonVaixell.getInt("orientacio"),
+                            jsonVaixell.getInt("color"),
+                            JUGADOR_RIVAL
+                    );
+                    vaixellsUnics.put(idOriginal, v);
+                }
 
                 mappingRival.put(c, v);
             }
@@ -355,10 +382,12 @@ public class MainActivity extends AppCompatActivity {
                 if (acabat) {
                     mostrarMissatge("¡HAS GUANYAT LA PARTIDA ONLINE!");
                     actualitzarEstatBotons(EstatJoc.ACABAT);
+                    mostrarResum();
                 } else {
                     mostrarMissatge("Continues tirant tu!");
                 }
             }
+            registrarJugada(JUGADOR_PROPI, c, vaixellAtacat);
             surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
 
         } catch (org.json.JSONException e) {
@@ -401,9 +430,10 @@ public class MainActivity extends AppCompatActivity {
                     acabat = true;
                     mostrarMissatge("¡EL RIVAL HA GUANYAT LA PARTIDA ONLINE!");
                     actualitzarEstatBotons(EstatJoc.ACABAT);
+                    mostrarResum();
                 }
             }
-
+            registrarJugada(JUGADOR_RIVAL, c, vaixellAtacat);
             // Avisem al servidor del resultat
             enviarResultatTir(fila, columna, resultatStr, acabat);
             surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
@@ -443,8 +473,7 @@ public class MainActivity extends AppCompatActivity {
     // Mètode per actualitzar els estats dels botons, habilitant o deshabilitant els corresponents
     private void actualitzarEstatBotons(EstatJoc nouEstat) {
         estatJoc = nouEstat;
-        // Si el joc està aturat o ha acabat, activem els botons de començar
-        if (estatJoc == EstatJoc.ATURAT || estatJoc == EstatJoc.ACABAT) {
+        if (estatJoc == EstatJoc.ATURAT) {
             btnNouJoc.setEnabled(true);
             btnNouJoc.setAlpha(1.0f);
             btnConnectar.setEnabled(true);
@@ -455,8 +484,19 @@ public class MainActivity extends AppCompatActivity {
             btnPista.setEnabled(false);
             btnPista.setAlpha(0.5f);
 
-        } else {
-            // Si estem JUGANT o EN_ESPERA, activem els botons d'aturar/pista
+        } else if (estatJoc == EstatJoc.ACABAT) {
+            // Permetem que quan hagi ACABAT, el botó d'Aturar quedi actiu (true) i visible, per reiniciar la graella
+            btnNouJoc.setEnabled(true);
+            btnNouJoc.setAlpha(1.0f);
+            btnConnectar.setEnabled(true);
+            btnConnectar.setAlpha(1.0f);
+
+            btnAturar.setEnabled(true);
+            btnAturar.setAlpha(1.0f);
+            btnPista.setEnabled(false);
+            btnPista.setAlpha(0.5f);
+
+        } else { // JUGANT o EN_ESPERA
             btnNouJoc.setEnabled(false);
             btnNouJoc.setAlpha(0.5f);
             btnConnectar.setEnabled(false);
@@ -562,11 +602,12 @@ public class MainActivity extends AppCompatActivity {
                 if (vaixellsRival.isEmpty()) {
                     tvMissatges.append("\n¡HAS GUANYAT LA PARTIDA!\n");
                     actualitzarEstatBotons(EstatJoc.ACABAT);
+                    mostrarResum();
                 } else {
                     tvMissatges.append("\nContinues tirant tu!\n");
                 }
             }
-
+            registrarJugada(JUGADOR_PROPI, c, vaixellAtacat);
             ferScrollMissatges(tvMissatges);
 
             // Repintem la graella del rival perquè es vegi el resultat de la jugada
@@ -743,8 +784,6 @@ public class MainActivity extends AppCompatActivity {
             UnsortedArrayMapping<Casella, Vaixell> mappingRival = vaixells.get(JUGADOR_RIVAL);
 
             collocarVaixellAleatori(mida, idVaixell, JUGADOR_PROPI, mappingPropi);
-            idVaixell++;
-
             collocarVaixellAleatori(mida, idVaixell, JUGADOR_RIVAL, mappingRival);
             idVaixell++;
         }
@@ -821,6 +860,11 @@ public class MainActivity extends AppCompatActivity {
     private void iniciarNouJoc() {
         TextView tvMissatges = findViewById(R.id.textViewMissatges);
         tvMissatges.setText("--- NOVA PARTIDA ---");
+        // Si veníem del mode online, ens desconnectem abans de jugar contra el Robot
+        if (connectat) {
+            gestorWebSocket.tancar();
+            connectat = false;
+        }
 
         // INICIALITZEM TOTES LES ESTRUCTURES AQUÍ (Al donar-li al Play)
         vaixells = new UnsortedArrayMapping<>(2);
@@ -836,6 +880,12 @@ public class MainActivity extends AppCompatActivity {
         casellesEnfonsades.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(20));
 
         objectiusRobot = new UnsortedArraySet<>(4);
+
+        historialJugades = new LinkedListQueue<>();
+
+        inventariVaixells = new UnsortedArrayMapping<>(2);
+        inventariVaixells.put(JUGADOR_PROPI, new UnsortedArrayMapping<>(10));
+        inventariVaixells.put(JUGADOR_RIVAL, new UnsortedArrayMapping<>(10));
 
         // Generem els vaixells ara
         crearVaixells();
@@ -935,12 +985,14 @@ public class MainActivity extends AppCompatActivity {
                 if (meusVaixells.isEmpty()) {
                     tvMissatges.append("\n¡EL ROBOT ET GUANYA LA PARTIDA!\n");
                     actualitzarEstatBotons(EstatJoc.ACABAT);
+                    mostrarResum();
                 } else {
                     tvMissatges.append("\nEl robot torna a tirar...\n");
                     ferJugadaRobot(); // Recursivitat: el robot torna a jugar perquè ha encertat
                 }
             }
 
+            registrarJugada(JUGADOR_RIVAL, casellaObjectiu, vaixellAtacat);
             ferScrollMissatges(tvMissatges);
 
             // Repintem LA TEVA graella perquè es vegi l'atac del robot
@@ -963,6 +1015,8 @@ public class MainActivity extends AppCompatActivity {
         casellesDestapades = null;
         casellesEnfonsades = null;
         objectiusRobot = null;
+        historialJugades = null;
+        inventariVaixells = null;
 
         // Restablim els textos de la interfície
         TextView tvMissatges = findViewById(R.id.textViewMissatges);
@@ -977,6 +1031,238 @@ public class MainActivity extends AppCompatActivity {
         // Repintem els taulells en buit
         surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
         surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
+    }
+
+    private void mostrarResum() {
+        Dialog dialog = new Dialog(this);
+        dialog.setContentView(R.layout.final_joc);
+
+        // Fem que el diàleg ocupi el 90% de la pantalla
+        dialog.getWindow().setLayout(
+                (int) (getResources().getDisplayMetrics().widthPixels * 0.9),
+                (int) (getResources().getDisplayMetrics().heightPixels * 0.9)
+        );
+        dialog.setCancelable(false); // No es pot tancar tocant a fora
+
+        // Determinar guanyador
+        TextView tvGuanyador = dialog.findViewById(R.id.textViewGuanyador);
+        if (vaixells.get(JUGADOR_PROPI).isEmpty()) {
+            tvGuanyador.setText("Ha guanyat el RIVAL!");
+        } else {
+            tvGuanyador.setText("Has guanyat TU!");
+        }
+
+        // Botó Tancar
+        ImageButton btnTancar = dialog.findViewById(R.id.btnTancarResum);
+        btnTancar.setOnClickListener(v -> {
+            dialog.dismiss();
+            aturarJoc(); // Reiniciem el joc en tancar el resum
+        });
+
+        // Botó Reproduir
+        android.widget.Button btnVeureResum = dialog.findViewById(R.id.btnVeureResum);
+        btnVeureResum.setOnClickListener(v -> {
+            btnVeureResum.setVisibility(View.GONE);
+            reproduirHistorial(dialog);
+        });
+
+        dialog.show();
+    }
+
+    private void registrarJugada(int jugador, Casella c, Vaixell v) {
+        if (historialJugades != null) {
+            boolean tocat = (v != null);
+            int color = tocat ? v.getColor() : Color.WHITE;
+
+            // Afegim la jugada al final de la cua
+            historialJugades.put(new Jugada(jugador, c, tocat, color));
+        }
+    }
+
+    private void reproduirHistorial(Dialog dialog) {
+        SurfaceView svMeu = dialog.findViewById(R.id.surfaceViewResumMeu);
+        SurfaceView svSeu = dialog.findViewById(R.id.surfaceViewResumSeu);
+
+        // Aquest conjunt anirà acumulant les jugades per repintar-les a cada "fotograma"
+        UnsortedArraySet<Jugada> jugadesMostrades = new UnsortedArraySet<>(200);
+
+        Handler handler = new Handler(Looper.getMainLooper());
+        Runnable[] task = new Runnable[1];
+
+        task[0] = new Runnable() {
+            @Override
+            public void run() {
+                // Comprovem si queden jugades a la nostra cua
+                if (!historialJugades.isEmpty()) {
+
+                    // Agafem la primera jugada de la cua (la més antiga)
+                    Jugada j = historialJugades.getFirst();
+
+                    // La traiem de la cua perquè no es torni a repetir
+                    historialJugades.removeFirst();
+
+                    // L'afegim al conjunt de jugades que s'han de pintar
+                    jugadesMostrades.add(j);
+
+                    // Repintem els taulells
+                    pintarResum(svMeu, jugadesMostrades, JUGADOR_RIVAL); // Atacs que m'han fet a mi
+                    pintarResum(svSeu, jugadesMostrades, JUGADOR_PROPI); // Atacs que he fet jo
+
+                    // Programem el següent "fotograma"
+                    handler.postDelayed(this, 200); // 200 mil·lisegons de retard
+                }
+            }
+        };
+        handler.post(task[0]);
+    }
+
+    private void pintarResum(SurfaceView surface, UnsortedArraySet<Jugada> jugades, int jugadorQueAtaca) {
+        if (surface.getHolder().getSurface().isValid()) {
+            Canvas canvas = surface.getHolder().lockCanvas();
+
+            if (canvas != null) {
+                canvas.drawColor(Color.parseColor("#D0E8E8"));
+
+                Paint p = new Paint();
+                p.setColor(Color.parseColor("#90C0C0"));
+                p.setStrokeWidth(3);
+
+                float casellaAmplada = (float) surface.getWidth() / 10;
+                float casellaAlt = (float) surface.getHeight() / 10;
+
+                for (int i = 1; i < 10; i++) {
+                    canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, surface.getHeight(), p);
+                    canvas.drawLine(0, casellaAlt * i, surface.getWidth(), casellaAlt * i, p);
+                }
+
+                // Dibuixem només les jugades
+                Iterator<Jugada> it = jugades.iterator();
+                while (it.hasNext()) {
+                    Jugada j = it.next();
+                    if (j.getJugadorQueDispara() == jugadorQueAtaca) {
+                        float esq = j.getCasellaAtacada().getCoordenadaX() * casellaAmplada;
+                        float dlt = j.getCasellaAtacada().getCoordenadaY() * casellaAlt;
+
+                        Paint pJugada = new Paint();
+                        pJugada.setAntiAlias(true);
+                        pJugada.setStyle(Paint.Style.FILL);
+
+                        if (!j.isHiHaVaixell()) {
+                            // Aigua
+                            pJugada.setColor(Color.WHITE);
+                            canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pJugada);
+                        } else {
+                            // Tocat/Enfonsat
+                            pJugada.setColor(j.getColorVaixell());
+                            canvas.drawRoundRect(esq + 4, dlt + 4, esq + casellaAmplada - 4, dlt + casellaAlt - 4, 15f, 15f, pJugada);
+
+                            Paint pPunt = new Paint();
+                            pPunt.setColor(Color.BLACK);
+                            canvas.drawCircle(esq + casellaAmplada / 2, dlt + casellaAlt / 2, 8f, pPunt);
+                        }
+                    }
+                }
+                surface.getHolder().unlockCanvasAndPost(canvas);
+            }
+        }
+    }
+
+    private void generarTextPistes() {
+        if (vaixells == null) return; // Si no hi ha partida en curs, no fem res
+
+        // Assegurem que l'inventari té la informació més recent
+        construirInventari(JUGADOR_PROPI);
+        construirInventari(JUGADOR_RIVAL);
+
+        // Generem els textos HTML
+        // Si estem connectats online, amaguem les caselles vives del rival
+        String pistesPropi = generarStringPistes(JUGADOR_PROPI, false);
+        String pistesRival = generarStringPistes(JUGADOR_RIVAL, connectat);
+
+        // Posem els textos als TextViews amb suport per HTML
+        TextView tvPistesPropi = findViewById(R.id.text_pistes_jugador);
+        tvPistesPropi.setText(android.text.Html.fromHtml(pistesPropi, android.text.Html.FROM_HTML_MODE_LEGACY));
+
+        TextView tvPistesRival = findViewById(R.id.text_pistes_rival);
+        tvPistesRival.setText(android.text.Html.fromHtml(pistesRival, android.text.Html.FROM_HTML_MODE_LEGACY));
+
+        // Calculem i mostrem els percentatges (Tocat / 20 caselles totals * 100)
+        int percentatgePropi = comptarCasellesMortes(JUGADOR_PROPI) * 100 / 20;
+        int percentatgeRival = comptarCasellesMortes(JUGADOR_RIVAL) * 100 / 20;
+
+        TextView tvPercentatgePropi = findViewById(R.id.text_percentatge_jugador);
+        tvPercentatgePropi.setText("Enfonsat: " + percentatgePropi + "%");
+
+        TextView tvPercentatgeRival = findViewById(R.id.text_percentatge_rival);
+        tvPercentatgeRival.setText("Enfonsat: " + percentatgeRival + "%");
+    }
+
+    private void construirInventari(int jugador) {
+        UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> inventariJugador = inventariVaixells.get(jugador);
+        UnsortedArrayMapping<Casella, Vaixell> vius = vaixells.get(jugador);
+        UnsortedArrayMapping<Casella, Vaixell> morts = casellesEnfonsades.get(jugador);
+
+        // Buidem l'inventari per refer-lo actualitzat
+        for (int i = 0; i < 10; i++) inventariJugador.put(i, new UnsortedArraySet<>(4));
+
+        // Afegim caselles vives
+        if (vius != null) {
+            Iterator<UnsortedArrayMapping<Casella, Vaixell>.Pair> itVius = vius.iterator();
+            while (itVius.hasNext()) {
+                UnsortedArrayMapping<Casella, Vaixell>.Pair p = itVius.next();
+                inventariJugador.get(p.getValue().getId()).add(p.getKey());
+            }
+        }
+        // Afegim caselles tocades/enfonsades
+        if (morts != null) {
+            Iterator<UnsortedArrayMapping<Casella, Vaixell>.Pair> itMorts = morts.iterator();
+            while (itMorts.hasNext()) {
+                UnsortedArrayMapping<Casella, Vaixell>.Pair p = itMorts.next();
+                inventariJugador.get(p.getValue().getId()).add(p.getKey());
+            }
+        }
+    }
+
+    private String generarStringPistes(int jugador, boolean amagarVives) {
+        StringBuilder sb = new StringBuilder();
+        UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> inventariJugador = inventariVaixells.get(jugador);
+        UnsortedArrayMapping<Casella, Vaixell> enfonsadesJugador = casellesEnfonsades.get(jugador);
+
+        for (int idVaixell = 0; idVaixell < 10; idVaixell++) {
+            UnsortedArraySet<Casella> casellesVaixell = inventariJugador.get(idVaixell);
+            if (casellesVaixell == null || casellesVaixell.isEmpty()) continue;
+
+            sb.append("<b>Vaixell ").append(idVaixell).append(":</b> ");
+
+            Iterator<Casella> it = casellesVaixell.iterator();
+            boolean first = true;
+            while (it.hasNext()) {
+                Casella c = it.next();
+                if (!first) sb.append(", ");
+                first = false;
+
+                boolean estaTocada = (enfonsadesJugador.get(c) != null);
+
+                if (estaTocada) {
+                    sb.append("<strong><font color='red'>").append(c.toString()).append("</font></strong>");
+                } else {
+                    if (amagarVives) sb.append("<i>[Ocult]</i>");
+                    else sb.append(c.toString());
+                }
+            }
+            sb.append("<br>");
+        }
+        return sb.toString();
+    }
+
+    private int comptarCasellesMortes(int jugador) {
+        int count = 0;
+        UnsortedArrayMapping<Casella, Vaixell> morts = casellesEnfonsades.get(jugador);
+        if (morts != null) {
+            Iterator<UnsortedArrayMapping<Casella, Vaixell>.Pair> it = morts.iterator();
+            while (it.hasNext()) { it.next(); count++; }
+        }
+        return count;
     }
 
 }
