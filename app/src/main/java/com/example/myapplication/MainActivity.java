@@ -404,6 +404,11 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             registrarJugada(JUGADOR_PROPI, c, vaixellAtacat);
+
+            TextView tvDarreraTeva = findViewById(R.id.text_darrera_jugada_teva);
+            if (tvDarreraTeva != null) {
+                tvDarreraTeva.setText("Darrera jugada teva: " + c.toString() + " -> " + resultat.toUpperCase());
+            }
             surfaceRival.post(() -> pintaGraelles(null, surfaceRival));
 
         } catch (org.json.JSONException e) {
@@ -450,6 +455,10 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             registrarJugada(JUGADOR_RIVAL, c, vaixellAtacat);
+            TextView tvDarreraRival = findViewById(R.id.text_darrera_jugada_seva);
+            if (tvDarreraRival != null) {
+                tvDarreraRival.setText("Darrera jugada rival: " + c.toString() + " -> " + resultatStr.toUpperCase());
+            }
             // Avisem al servidor del resultat
             enviarResultatTir(fila, columna, resultatStr, acabat);
             surfaceJugador.post(() -> pintaGraelles(null, surfaceJugador));
