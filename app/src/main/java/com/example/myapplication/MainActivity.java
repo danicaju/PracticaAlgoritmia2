@@ -385,6 +385,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (resultat.equals("aigua")) {
                 mostrarMissatge("El teu atac a " + c.toString() + " -> AIGUA!");
+                mostrarMissatge("Li toca al rival!");
                 tornActual = JUGADOR_RIVAL;
                 actualitzarEstatBotons(EstatJoc.EN_ESPERA);
             } else {
@@ -435,6 +436,7 @@ public class MainActivity extends AppCompatActivity {
 
             if (vaixellAtacat == null) {
                 mostrarMissatge("El rival ataca " + c.toString() + " -> AIGUA!");
+                mostrarMissatge("Te toca!");
                 tornActual = JUGADOR_PROPI;
                 actualitzarEstatBotons(EstatJoc.JUGANT);
             } else {
@@ -581,6 +583,7 @@ public class MainActivity extends AppCompatActivity {
                 UnsortedArraySet<Casella> destapadesRival = casellesDestapades.get(JUGADOR_RIVAL);
                 if (destapadesRival.contains(c)) {
                     mostrarMissatge("Ja havies atacat la casella " + c.toString() + "!");
+                    mostrarMissatge("Torna a tirar!");
                     return;
                 }
                 enviarTirar(c);
