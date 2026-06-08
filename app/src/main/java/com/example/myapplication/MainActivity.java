@@ -31,20 +31,39 @@ public class MainActivity extends AppCompatActivity {
     private boolean connectat = false;
 
     private UnsortedArraySet<View> conjuntPistes;
+
+    // UnsortedArrayMapping para vaixells y casellesEnfonsades, ja que necessitem associar una clau (Casella) a un valor (Vaixell).
+   // Al ser Unsorted, l'inserció és ràpida O(1), ja que no necessitem recuperar el taulell ordenat
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> vaixells;
-    private UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> casellesDestapades;
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Casella, Vaixell>> casellesEnfonsades;
+
+    // A casselles destapades hem elegit dins el mapping un UnsortedArraySet ya que el tamany de caselles és petit (màxim 100) i l'ordre no importa.
+    // A més evitem caselles duplicades
+    private UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> casellesDestapades;
     private UnsortedArraySet<Casella> objectiusRobot;
     private GestorWebSocket gestorWebSocket;
+
+    // Les jugades requereixen mostrar-se en l'ordre que es van anar ficant, per tant la cua és ideal
+    // Com la quantitat de jugades poden arribar a ser molt variables, hem decidit emprar una llista enllaçada, que va perfecte per aquesta tasca
     private LinkedListQueue<Jugada> historialJugades;
+
+    /* Utilitzem un Mapping on la clau és l'ID del vaixell i el valor és un Set de les seves caselles.
+    Això permet saber quines caselles pertanyen a cada vaixell de forma eficient per generar les pistes. */
     private UnsortedArrayMapping<Integer, UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>>> inventariVaixells;
+
+    /*
+    Efectivament, els arrays sofreixen problemes de rendiment si han de redimensionar-se sovint.
+    No obstant això, en el tauler d'Enfonsar la Flota la grandària màxima és delimitat i predictible
+    (100 caselles màxim, 20 parts de vaixell màxim). Per tant, l'ús de mappings basats en arrays és eficient ja que no superarem mai la capacitat inicial.
+     Per contra, per a l'historial de jugades, com serà molt més variable, hem optat per una estructura enllaçada (LinkedListQueue) per a garantir operacions O(1) d'inserció sense desplaçaments de memòria.
+      */
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Apaisado
+        // Apaisat
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         // Scroll de mensajes
@@ -289,7 +308,7 @@ public class MainActivity extends AppCompatActivity {
             mostrarMissatge("Error enviant cercar partida: " + e.getMessage());
         }
     }
-    // Mètodes buits per evitar errors. Els omplirem al Pas 5.
+    // Mètode per gestionar l'inici d'una partida quan el servidor troba un rival
     private void gestionarPartidaTrobada(JSONObject json) {
         boolean etToca = json.optBoolean("etToca", false);
         JSONObject rival = json.optJSONObject("rival");
@@ -315,7 +334,7 @@ public class MainActivity extends AppCompatActivity {
             mostrarMissatge("Comença el rival. Esperant el seu atac...");
         }
     }
-
+    // Mètode per carregar la flota del rival a partir del JSON rebut del servidor
     private void carregarVaixellsRival(JSONObject jsonVaixells) {
         try {
             JSONArray arr = jsonVaixells.getJSONArray("casellesVaixellsVius");
@@ -358,8 +377,8 @@ public class MainActivity extends AppCompatActivity {
         try {
             JSONObject json = new JSONObject();
             json.put("tipus", "tirar");
-            json.put("fila", c.getCoordenadaY());    // Y = Fila
-            json.put("columna", c.getCoordenadaX()); // X = Columna
+            json.put("fila", c.getCoordenadaY());
+            json.put("columna", c.getCoordenadaX());
             gestorWebSocket.enviar(json);
         } catch (org.json.JSONException e) {
             mostrarMissatge("Error enviant tir: " + e.getMessage());
@@ -470,6 +489,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Mètode per enviar el resultat d'un tir realitzat
     private void enviarResultatTir(int fila, int columna, String resultat, boolean acabat) {
         try {
             JSONObject json = new JSONObject();
@@ -491,7 +511,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Mètode mostrarMissatges per mostrar un missatge al tvMissatges
+    // Mètode per mostrar un missatge al tvMissatges
     public void mostrarMissatge(String missatge) {
         TextView tvMissatges = findViewById(R.id.textViewMissatges);
         if (tvMissatges != null) {
@@ -606,7 +626,7 @@ public class MainActivity extends AppCompatActivity {
             Vaixell vaixellAtacat = vaixellsRival.get(c);
             // Si no s'ha atacat el vaixell és aigua i canviam de torn, i sinó, és tocat o enfonsat i continua jugant
             if (vaixellAtacat == null) {
-                // ---------- AIGUA ----------
+                //  AIGUA
                 tvMissatges.append("\nEl teu atac " + c.toString() + " -> AIGUA!\n");
 
                 // Canvi de torn
@@ -617,7 +637,7 @@ public class MainActivity extends AppCompatActivity {
                 // El robot actua perquè has fallat!
                 ferJugadaRobot();
             } else {
-                // ---------- TOCAT O ENFONSAT ----------
+                // TOCAT O ENFONSAT
                 vaixellAtacat.rebreTret(); // Sumem 1 al dany del vaixell
 
                 vaixellsRival.remove(c); // Lllevem aquesta coordenada dels vius
@@ -671,10 +691,10 @@ public class MainActivity extends AppCompatActivity {
             Canvas canvas = surface.getHolder().lockCanvas();
 
             if (canvas != null) {
-                // 1. Netejem el fons
+                // Netejem el fons
                 canvas.drawColor(Color.parseColor("#D0E8E8"));
 
-                // 2. Preparem pincell per la graella
+                // Preparem pincell per la graella
                 Paint p = new Paint();
                 p.setColor(Color.parseColor("#90C0C0"));
                 p.setStrokeWidth(3);
@@ -682,7 +702,7 @@ public class MainActivity extends AppCompatActivity {
                 float casellaAmplada = (float) amplada / 10;
                 float casellaAlt = (float) alt / 10;
 
-                // 3. Dibuixar la quadrícula (Línies)
+                // Dibuixar la quadrícula (Línies)
                 for (int i = 1; i < 10; i++) {
                     canvas.drawLine(casellaAmplada * i, 0, casellaAmplada * i, alt, p);
                     canvas.drawLine(0, casellaAlt * i, amplada, casellaAlt * i, p);
@@ -814,13 +834,13 @@ public class MainActivity extends AppCompatActivity {
             UnsortedArrayMapping<Casella, Vaixell> mappingPropi = vaixells.get(JUGADOR_PROPI);
             UnsortedArrayMapping<Casella, Vaixell> mappingRival = vaixells.get(JUGADOR_RIVAL);
 
-            collocarVaixellAleatori(mida, idVaixell, JUGADOR_PROPI, mappingPropi);
-            collocarVaixellAleatori(mida, idVaixell, JUGADOR_RIVAL, mappingRival);
+            colocarVaixellAleatori(mida, idVaixell, JUGADOR_PROPI, mappingPropi);
+            colocarVaixellAleatori(mida, idVaixell, JUGADOR_RIVAL, mappingRival);
             idVaixell++;
         }
     }
 
-    private void collocarVaixellAleatori(int mida, int id, int jugador, UnsortedArrayMapping<Casella, Vaixell> mapping) {
+    private void colocarVaixellAleatori(int mida, int id, int jugador, UnsortedArrayMapping<Casella, Vaixell> mapping) {
         boolean colocat = false;
         int color = getColorPerMida(mida); // Assignem un color segons la mida
 
