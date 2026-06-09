@@ -633,6 +633,7 @@ public class MainActivity extends AppCompatActivity {
                 tornActual = JUGADOR_RIVAL;
                 actualitzarEstatBotons(EstatJoc.EN_ESPERA);
                 tvMissatges.append("\nTorn del rival. El robot està pensant...\n");
+                ferScrollMissatges(tvMissatges);
 
                 // El robot actua perquè has fallat!
                 ferJugadaRobot();
@@ -656,6 +657,7 @@ public class MainActivity extends AppCompatActivity {
                     mostrarResum();
                 } else {
                     tvMissatges.append("\nContinues tirant tu!\n");
+                    ferScrollMissatges(tvMissatges);
                 }
             }
             registrarJugada(JUGADOR_PROPI, c, vaixellAtacat);
@@ -1013,6 +1015,7 @@ public class MainActivity extends AppCompatActivity {
                 tornActual = JUGADOR_PROPI;
                 actualitzarEstatBotons(EstatJoc.JUGANT);
                 tvMissatges.append("\nTorn teu. Tira!");
+                ferScrollMissatges(tvMissatges);
             } else {
                 // ---------- TOCAT O ENFONSAT ----------
                 vaixellAtacat.rebreTret();
@@ -1039,6 +1042,7 @@ public class MainActivity extends AppCompatActivity {
                     mostrarResum();
                 } else {
                     tvMissatges.append("\nEl robot torna a tirar...\n");
+                    ferScrollMissatges(tvMissatges);
                     ferJugadaRobot(); // Recursivitat: el robot torna a jugar perquè ha encertat
                 }
             }
@@ -1280,6 +1284,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Mètode per generar una cadena de text amb les coordenades de cada vaixell i el seu estat
     private String generarStringPistes(int jugador, boolean amagarVives) {
         StringBuilder sb = new StringBuilder();
         UnsortedArrayMapping<Integer, UnsortedArraySet<Casella>> inventariJugador = inventariVaixells.get(jugador);
