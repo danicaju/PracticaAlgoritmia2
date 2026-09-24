@@ -1,59 +1,98 @@
 package com.example.myapplication;
 
+/**
+ * Una implementación de cola (Queue) utilizando una lista enlazada simple.
+ *
+ * @param <E> El tipo de elementos almacenados en esta cola.
+ */
 public class LinkedListQueue<E> {
-    private class Node {
-        private E elem;
-        private Node next;
+    private static class Node<E> {
+        private final E elem;
+        private Node<E> next;
 
-        public Node(E item, Node next) {
+        public Node(E item, Node<E> next) {
             this.elem = item;
             this.next = next;
         }
     }
-    private Node p, q;
-    public LinkedListQueue(){
-        p = null;
-        q = null;
+
+    private Node<E> head; // Nodo apuntando al frente de la cola (para eliminar)
+    private Node<E> tail; // Nodo apuntando al final de la cola (para insertar)
+
+    /**
+     * Constructor por defecto para inicializar una cola vacía.
+     */
+    public LinkedListQueue() {
+        head = null;
+        tail = null;
     }
+
+    /**
+     * Inserta un elemento al final de la cola.
+     *
+     * @param item El elemento a insertar.
+     * @return true si se añadió con éxito, false si no hay memoria disponible.
+     */
     public boolean put(E item) {
         try {
-            Node r = new Node(item, null);
-            if (p == null) {
-                p = r;
-                q = r;
+            Node<E> r = new Node<>(item, null);
+            if (tail == null) {
+                tail = r;
+                head = r;
             } else {
-                p.next = r;
-                p = r;
+                tail.next = r;
+                tail = r;
             }
             return true;
         } catch (OutOfMemoryError e) {
             return false;
         }
     }
+
+    /**
+     * Elimina el primer elemento de la cola.
+     *
+     * @return true si se eliminó con éxito, false si la cola estaba vacía.
+     */
     public boolean removeFirst() {
-        if (q == null) {
+        if (head == null) {
             return false;
         } else {
-            q = q.next;
-            if (q == null) {
-                p = null;
+            head = head.next;
+            if (head == null) {
+                tail = null;
             }
             return true;
         }
     }
 
+    /**
+     * Obtiene el primer elemento de la cola sin eliminarlo.
+     *
+     * @return El primer elemento, o null si la cola está vacía.
+     */
     public E getFirst() {
-        if (q == null) {
+        if (head == null) {
             return null;
         } else {
-            return q.elem;
+            return head.elem;
         }
     }
+
+    /**
+     * Verifica si la cola está vacía.
+     *
+     * @return true si la cola no contiene elementos, false en caso contrario.
+     */
     public boolean isEmpty() {
-        return q == null;
+        return head == null;
     }
+
+    /**
+     * Vacía completamente la cola.
+     */
     public void empty() {
-        p = null;
-        q = null;
+        tail = null;
+        head = null;
     }
 }
