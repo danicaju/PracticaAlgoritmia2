@@ -2,6 +2,8 @@
 
 ![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 ![Java](https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=java&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Completed-success?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 Proyecto Android desarrollado como práctica para la asignatura de **Algoritmia 2**. Implementa y visualiza diversas estructuras de datos avanzadas y algoritmos complejos (basados en grafos, mapas y colas) aplicados en un entorno móvil interactivo (clon de Hundir la Flota / Battleship).
 
